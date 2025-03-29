@@ -1,2 +1,2 @@
-# C964_CC_FRAUD_DETECTION
-Credit Card Fraud Detection System using Machine Learning
+# Credit Card Fraud Detection System using Machine Learning
+This project aims to create a machine learning system to detect fraudulent credit card transactions. The system will use ensemble methods, specifically Random Forest or XGBoost, to analyze transaction data and flag potentially fraudulent activities. The project will include data preprocessing, model training, evaluation, and a command-line interface to generate visualizations and/or reports.
