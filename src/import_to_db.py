@@ -2,8 +2,9 @@ import os
 import argparse
 import pandas as pd
 from sqlalchemy import create_engine, text
-import kagglehub
+from kaggle.api.kaggle_api_extended import KaggleApi
 from datetime import datetime
+from tqdm import tqdm
 
 def main():
     # Parse command-line arguments
@@ -17,21 +18,40 @@ def main():
     try:
         # Download dataset from Kaggle
         print("Downloading dataset from Kaggle...")
-        dataset_path = kagglehub.dataset_download(
+
+        # Initialize Kaggle API
+        api = KaggleApi()
+        api.authenticate()
+
+        # Download dataset
+        api.dataset_download_files(
             'kartik2112/fraud-detection',
-            path='../data'
+            path='../data',
+            unzip=True,
+            quiet=False
         )
-        csv_file = os.path.join(dataset_path, 'fraudTrain.csv')
-        table_name = "fraudTrain"
+
+        csv_file = os.path.join('../data', 'fraudTrain.csv')
+        table_name = "fraud_train"
 
         # Load data with proper typing
         print("Loading data into pandas...")
-        df = pd.read_csv(csv_file, parse_dates=['trans_date_trans_time', 'dob'])
+        df = pd.read_csv(
+            csv_file,
+            parse_dates=['trans_date_trans_time', 'dob']
+        )
+
+        df.drop(columns=['Unnamed: 0'], inplace=True)  # Explicitly drop the column
+        df['is_fraud'] = df['is_fraud'].astype(bool) # Convert is_fraud column to bool
+
+        # Remove 'fraud_' prefix from merchant names
+        print("Cleaning merchant names...")
+        df['merchant'] = df['merchant'].str.replace('fraud_', '', regex=False)
 
         # Create PostgreSQL connection
         print("Connecting to database...")
         engine = create_engine(
-            f"postgresql+psycopg2://{args.db_user}:{args.db_password}@{args.db_host}/{args.db_name}"
+            f"postgresql+psycopg2://{args.db_user}:{args.db_pass}@{args.db_host}/{args.db_name}"
         )
 
         # Create table with optimized schema
@@ -66,52 +86,30 @@ def main():
             """))
             conn.commit()
 
-        # Insert data
-        # Insert data only if it doesn't exist
-        print("Inserting data...")
-        df['is_fraud'] = df['is_fraud'].astype(bool)
-
-        # Use raw SQL for upsert logic
+        # Delete all existing data from the table
+        print(f"Deleting all existing data from '{table_name}'...")
         with engine.connect() as conn:
-            for _, row in df.iterrows():
-                conn.execute(text(f"""
-                    INSERT INTO {args.table_name} (
-                        trans_date_trans_time, cc_num, merchant, category, amt, first, last, gender,
-                        street, city, state, zip, lat, long, city_pop, job, dob, trans_num,
-                        unix_time, merch_lat, merch_long, is_fraud
-                    )
-                    VALUES (
-                        :trans_date_trans_time, :cc_num, :merchant, :category, :amt, :first, :last,
-                        :gender, :street, :city, :state, :zip, :lat, :long, :city_pop,
-                        :job, :dob, :trans_num, :unix_time, :merch_lat, :merch_long, :is_fraud
-                    )
-                    ON CONFLICT (trans_num) DO NOTHING
-                """), {
-                    "trans_date_trans_time": row['trans_date_trans_time'],
-                    "cc_num": row['cc_num'],
-                    "merchant": row['merchant'],
-                    "category": row['category'],
-                    "amt": row['amt'],
-                    "first": row['first'],
-                    "last": row['last'],
-                    "gender": row['gender'],
-                    "street": row['street'],
-                    "city": row['city'],
-                    "state": row['state'],
-                    "zip": row['zip'],
-                    "lat": row['lat'],
-                    "long": row['long'],
-                    "city_pop": row['city_pop'],
-                    "job": row['job'],
-                    "dob": row['dob'],
-                    "trans_num": row['trans_num'],
-                    "unix_time": row['unix_time'],
-                    "merch_lat": row['merch_lat'],
-                    "merch_long": row['merch_long'],
-                    "is_fraud": row['is_fraud']
-                })
+            conn.execute(text(f"TRUNCATE TABLE {table_name} RESTART IDENTITY;"))
+            conn.commit()
 
-        print(f"Successfully imported {len(df)} records to {table_name}")
+        # Insert new data into the table with progress bar
+        print(f"Inserting data into '{table_name}'... This may take a while...")
+
+        chunksize = 1000  # Process in chunks of 1000 rows
+        total_rows = len(df)
+
+        with tqdm(total=total_rows, desc="Writing to database") as pbar:
+            for i in range(0, total_rows, chunksize):
+                chunk = df.iloc[i:i + chunksize]
+                chunk.to_sql(
+                    name=table_name,
+                    con=engine,
+                    if_exists='append',
+                    index=False,
+                )
+                pbar.update(len(chunk))
+
+        print(f"Successfully imported {len(df)} records into '{table_name}'.")
 
     except Exception as e:
         print(f"Error: {str(e)}")
