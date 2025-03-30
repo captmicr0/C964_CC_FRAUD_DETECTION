@@ -1,3 +1,6 @@
+# Kaggle Credit Card Fraud Detection dataset
+data/creditcard.csv
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
