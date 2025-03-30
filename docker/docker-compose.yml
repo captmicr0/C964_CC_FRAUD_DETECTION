@@ -1,0 +1,33 @@
+version: '3.8'
+
+services:
+  fraud-detection-db:
+    image: postgres:15
+    container_name: fraud-detection-db
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: fraud_detection
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  fraud-detection-app:
+    build:
+      context: ../  # Set the build context to the parent directory of docker/
+      dockerfile: docker/Dockerfile  # Explicitly specify the Dockerfile location
+    container_name: fraud-detection-app
+    depends_on:
+      - fraud-detection-db
+    environment:
+      DB_HOST: fraud-detection-db
+      DB_NAME: fraud_detection
+      DB_USER: postgres
+      DB_PASSWORD: password
+    volumes:
+      - ../data/kaggle.json:/root/.kaggle/kaggle.json
+      - ../data:/app/data  # Mount the data directory for dataset access if needed
+
+volumes:
+  postgres_data:
