@@ -74,12 +74,17 @@ docker-compose up --build
   ```
 - Run training:
   ```
-  python src/main.py --mode train --db-host fraud-detection-db --db-name fraud_detection --db-user postgres --db-password password
+  python src/main.py --db-host fraud-detection-db --db-name fraud_detection --db-user postgres --db-pass password --mode train
   ```
 - Run predictions:
-  ```
-  python src/main.py --mode predict --db-host fraud-detection-db --db-name fraud_detection --db-user postgres --db-password password --input-file data/fraudTest.csv
-  ```
+  - Database table as input
+    ```
+    python src/main.py --db-host localhost --db-name fraud_detection --db-user postgres --db-pass password --mode predict --input-table fraud_test
+    ```
+  - CSV file as input
+    ```
+    python src/main.py --db-host localhost --db-name fraud_detection --db-user postgres --db-pass password --mode predict --input-file ../data/fraudTest.csv
+    ```
 
 4. Stop all services when done:
 ```
@@ -104,18 +109,23 @@ docker run --name fraud-db -e POSTGRES_USER=postgres -e POSTGRES_PASSWORD=passwo
 ```
 
 4. Run the main script for training or predictions:
-- For Importing Dataset:
+- For Importing Training Data:
   ```
-  python src/import_to_db.py --db-host localhost --db-name fraud_detection --db-user postgres --db-password password --dataset kartik2112/fraud-detection
+  python src/import_to_db.py --db-host localhost --db-name fraud_detection --db-user postgres --db-pass password
   ```
 - For Training:
   ```
   python src/main.py --db-host localhost --db-name fraud_detection --db-user postgres --db-password password --mode train
   ```
 - For Predictions:
-  ```
-  python src/main.py --db-host localhost --db-name fraud_detection --db-user postgres --db-password password --mode predict --input-file data/fraudTest.csv
-  ```
+  - Database table as input
+    ```
+    python src/main.py --db-host localhost --db-name fraud_detection --db-user postgres --db-password password --mode predict --input-table fraud_test
+    ```
+  - CSV file as input
+    ```
+    python src/main.py --db-host localhost --db-name fraud_detection --db-user postgres --db-password password --mode predict --input-file ../data/fraudTest.csv
+    ```
 
 ## Future Enhancements
 - Explore additional algorithms for improved performance.
