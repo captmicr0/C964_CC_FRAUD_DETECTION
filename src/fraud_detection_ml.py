@@ -76,12 +76,47 @@ class FraudDetector:
         self._plot_confusion_matrix(y_test, y_pred)
         self._plot_feature_importance()
 
+    def _plot_roc_curve(self, y_true, y_probs):
+        """Generate ROC curve visualization"""
+        fpr, tpr, _ = roc_curve(y_true, y_probs)
+        plt.figure()
+        plt.plot(fpr, tpr, label='XGBoost (AUC = %0.2f)' % roc_auc_score(y_true, y_probs))
+        plt.plot([0, 1], [0, 1], 'k--')
+        plt.xlabel('False Positive Rate')
+        plt.ylabel('True Positive Rate')
+        plt.title('ROC Curve')
+        plt.legend(loc="lower right")
+        plt.savefig('roc_curve.png')
+        plt.close()
+
+    def _plot_confusion_matrix(self, y_true, y_pred):
+        """Generate confusion matrix visualization"""
+        cm = confusion_matrix(y_true, y_pred)
+        plt.figure(figsize=(6,6))
+        sns.heatmap(cm, annot=True, fmt='d', cmap='Blues')
+        plt.title('Confusion Matrix')
+        plt.ylabel('True Label')
+        plt.xlabel('Predicted Label')
+        plt.savefig('confusion_matrix.png')
+        plt.close()
+
+    def _plot_feature_importance(self):
+        """Generate feature importance visualization"""
+        importances = self.model.feature_importances_
+        indices = np.argsort(importances)[-10:]
+        plt.figure(figsize=(10,6))
+        plt.title('Top 10 Important Features')
+        plt.barh(range(len(indices)), importances[indices], align='center')
+        plt.yticks(range(len(indices)), [self.features[i] for i in indices])
+        plt.tight_layout()
+        plt.savefig('feature_importance.png')
+        plt.close()
+
     def save_model(self, path='fraud_model.pkl'):
         """Save trained model"""
         joblib.dump(self.model, path)
         print(f"Model saved to {path}")
-
-
+    
 if __name__ == "__main__":
     # Parse command-line arguments
     parser = argparse.ArgumentParser(description='Credit Card Fraud Detection System')
