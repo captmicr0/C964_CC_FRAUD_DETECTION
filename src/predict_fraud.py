@@ -3,6 +3,8 @@ import argparse
 import pandas as pd
 import joblib
 from sqlalchemy import create_engine
+import matplotlib.pyplot as plt
+import seaborn as sns
 
 class FraudPredictionCLI:
     def __init__(self, model_path, db_engine=None):
@@ -19,7 +21,7 @@ class FraudPredictionCLI:
         self._validate_input(features)
         
         probabilities = self.model.predict_proba(features)[:, 1]
-        return self._format_results(identifiers, probabilities)
+        return self._format_results(features, identifiers, probabilities)
 
     def _validate_input(self, input_data):
         missing = set(self.required_features) - set(input_data.columns)
@@ -43,6 +45,12 @@ class FraudPredictionCLI:
         return self._preprocess_single(args), None
 
     def _preprocess_single(self, args):
+        # One-hot encode the category input for single transaction processing
+        category_columns = [
+            'category_entertainment', 'category_grocery_pos',
+            'category_misc_net', 'category_travel'
+        ]
+
         data = {
             'amt': args.amount,
             'city_pop': args.city_pop,
@@ -54,15 +62,28 @@ class FraudPredictionCLI:
             'merch_lat': args.merch_lat,
             'merch_long': args.merch_long
         }
+        
+        # Add one-hot encoded category columns
+        for col in category_columns:
+            data[col] = 1 if col == f"category_{args.category}" else 0
+        
         return pd.DataFrame([data])
 
     def _preprocess_csv(self, file_path):
         df = pd.read_csv(file_path, parse_dates=['trans_date_trans_time', 'dob'])
+
+        # One-hot encode the category column for batch processing
+        df = pd.get_dummies(df, columns=['category'], prefix='category')
+
         return self._process_common_features(df)
 
     def _preprocess_db_table(self, table_name):
         query = f"SELECT * FROM {table_name}"
         df = pd.read_sql(query, self.engine)
+
+        # One-hot encode the category column for batch processing
+        df = pd.get_dummies(df, columns=['category'], prefix='category')
+
         return self._process_common_features(df)
 
     def _process_common_features(self, df):
@@ -71,15 +92,81 @@ class FraudPredictionCLI:
         df['age'] = (pd.to_datetime('today') - df['dob']).dt.days // 365
         
         identifiers = df[['trans_num']] if 'trans_num' in df.columns else None
-        features = df[self.required_features]
+        
+        # Include one-hot encoded category columns dynamically
+        category_columns = [col for col in df.columns if col.startswith('category_')]
+        
+        features = df[self.required_features + category_columns]
         
         return features, identifiers
 
-    def _format_results(self, identifiers, probabilities):
-        results = pd.DataFrame({'fraud_probability': probabilities})
+    def _format_results(self, features, identifiers, probabilities):
+        results = pd.DataFrame({
+            'fraud_probability': probabilities,
+            'amt': features['amt'],  # Add amt from processed features
+            'city_pop': features['city_pop']  # Add city_pop
+        })
         if identifiers is not None:
             results = pd.concat([identifiers.reset_index(drop=True), results], axis=1)
         return results
+    
+    @staticmethod
+    def visualize_results(results, save_path='../data/prediction_results/'):
+        """Generate visualizations for batch results."""
+        
+        # Ensure the save path exists
+        os.makedirs(save_path, exist_ok=True)
+
+        # Pie Chart: Fraud Risk Distribution
+        bins = [0, 30, 70, 100]
+        labels = ['Low Risk', 'Medium Risk', 'High Risk']
+        results['Risk Level'] = pd.cut(results['fraud_probability'] * 100, bins=bins, labels=labels)
+        
+        risk_counts = results['Risk Level'].value_counts()
+        
+        plt.figure(figsize=(8, 8))
+        plt.pie(risk_counts, labels=risk_counts.index, autopct='%1.1f%%', colors=['green', 'orange', 'red'])
+        plt.title('Fraud Risk Distribution')
+        plt.savefig(os.path.join(save_path, 'fraud_risk_pie_chart.png'))
+        
+        # Histogram: Fraud Probability Distribution
+        plt.figure(figsize=(10, 6))
+        plt.hist(results['fraud_probability'] * 100, bins=10, color='blue', alpha=0.7)
+        plt.xlabel('Fraud Probability (%)')
+        plt.ylabel('Number of Transactions')
+        plt.title('Distribution of Fraud Probabilities')
+        plt.savefig(os.path.join(save_path, 'fraud_probability_histogram.png'))
+        
+        # Heatmap: Correlation Matrix
+        correlation_data = results[['amt', 'city_pop', 'fraud_probability']]
+        
+        corr_matrix = correlation_data.corr()
+        
+        plt.figure(figsize=(8, 6))
+        sns.heatmap(corr_matrix, annot=True, cmap='coolwarm', fmt='.2f')
+        plt.title('Correlation Heatmap')
+        plt.savefig(os.path.join(save_path, 'correlation_heatmap.png'))
+        
+        # Scatter Plot: Transaction Amount vs Fraud Probability
+        plt.figure(figsize=(10, 6))
+        sns.scatterplot(
+            x='amt',
+            y='fraud_probability',
+            data=results,
+            hue='Risk Level',
+            palette={'Low Risk': 'green', 'Medium Risk': 'orange', 'High Risk': 'red'}
+        )
+        plt.xlabel('Transaction Amount ($)')
+        plt.ylabel('Fraud Probability (%)')
+        plt.title('Transaction Amount vs Fraud Probability')
+        plt.legend(title='Risk Level')
+        plt.savefig(os.path.join(save_path, 'scatter_plot_amt_vs_fraud.png'))
+
+        print("Visualizations saved to {path}:")
+        print("- fraud_risk_pie_chart.png")
+        print("- fraud_probability_histogram.png")
+        print("- correlation_heatmap.png")
+        print("- scatter_plot_amt_vs_fraud.png")
 
 if __name__ == "__main__":
     # Parse command-line arguments
@@ -132,6 +219,10 @@ if __name__ == "__main__":
     single_group.add_argument('--merch-lat', type=float, help='Merchant latitude')
     single_group.add_argument('--merch-long', type=float, help='Merchant longitude')
     
+    # Category argument for single transactions
+    single_group.add_argument('--category', choices=['entertainment', 'grocery_pos', 'misc_net', 'travel'],
+                               help="Transaction category (e.g., entertainment, grocery_pos)")
+    
     # Required args
     parser.add_argument('--model-path', required=True, help='Path to trained ML model')
 
@@ -159,6 +250,9 @@ if __name__ == "__main__":
         else:
             print("Fraud Probability Results:")
             print(results.to_string(index=False))
+        
+        if args.output_file or args.output_table:
+            predictor.visualize_results(results)
             
     except Exception as e:
         print(f"Error: {str(e)}")
