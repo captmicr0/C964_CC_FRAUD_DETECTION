@@ -92,11 +92,38 @@ class CSVImporter:
 if __name__ == "__main__":
     # Parse command-line arguments
     parser = argparse.ArgumentParser(description='Import Kaggle dataset into PostgreSQL')
-    parser.add_argument('--db-host', required=True, help='PostgreSQL host')
-    parser.add_argument('--db-name', required=True, help='Database name')
-    parser.add_argument('--db-user', required=True, help='Database user')
-    parser.add_argument('--db-pass', required=True, help='Database password')
-    parser.add_argument('--data-dir', default='../data', help='Directory where datasets are stored (default: ../data)')
+
+    # Add arguments with fallback to environment variables
+    parser.add_argument(
+        '--db-host', 
+        default=os.getenv('DB_HOST'), 
+        required=os.getenv('DB_HOST') is None, 
+        help='PostgreSQL host (can fallback to ENV var DB_HOST)'
+    )
+    parser.add_argument(
+        '--db-name', 
+        default=os.getenv('DB_NAME'), 
+        required=os.getenv('DB_NAME') is None, 
+        help='Database name (can fallback to ENV var DB_NAME)'
+    )
+    parser.add_argument(
+        '--db-user', 
+        default=os.getenv('DB_USER'), 
+        required=os.getenv('DB_USER') is None, 
+        help='Database user (can fallback to ENV var DB_USER)'
+    )
+    parser.add_argument(
+        '--db-pass', 
+        default=os.getenv('DB_PASS'), 
+        required=os.getenv('DB_PASS') is None, 
+        help='Database password (can fallback to ENV var DB_PASS)'
+    )
+    parser.add_argument(
+        '--data-dir', 
+        default=os.getenv('DATA_DIR', '../data'),  # Fallback to ENV var DATA_DIR or default value
+        help='Directory where datasets are stored (default: ../data or ENV var DATA_DIR)'
+    )
+    
     args = parser.parse_args()
 
     # Download dataset from Kaggle
