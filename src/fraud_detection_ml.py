@@ -112,7 +112,7 @@ class FraudDetector:
         plt.savefig('feature_importance.png')
         plt.close()
 
-    def save_model(self, path='fraud_model.pkl'):
+    def save_model(self, path):
         """Save trained model"""
         joblib.dump(self.model, path)
         print(f"Model saved to {path}")
@@ -148,8 +148,8 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         '--save-model', 
-        default=os.getenv('SAVE_MODEL', 'fraud_model.pk1'),  # Fallback to ENV var SAVE_MODEL or default value
-        help='Directory where datasets are stored (default: fraud_model.pkl or ENV var SAVE_MODEL)'
+        default=os.getenv('SAVE_MODEL', '../data/fraud_model.pk1'),  # Fallback to ENV var SAVE_MODEL or default value
+        help='Directory where datasets are stored (default: ../data/fraud_model.pkl or ENV var SAVE_MODEL)'
     )
     
     args = parser.parse_args()

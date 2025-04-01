@@ -114,7 +114,7 @@ class FraudPredictionCLI:
         return results
     
     @staticmethod
-    def visualize_results(results, save_path='../data/prediction_results/'):
+    def visualize_results(results, save_path):
         """Generate visualizations for batch results."""
         
         # Ensure the save path exists
@@ -190,13 +190,13 @@ if __name__ == "__main__":
     input_group = parser.add_argument_group('Input options')
     input_mutex = input_group.add_mutually_exclusive_group()
     input_mutex.add_argument('--input-file', help='Path to input CSV file')
-    input_mutex.add_argument('--input-table', help='Database table name for input')
+    input_mutex.add_argument('--input-table', default='fraud_test', help='Database table name for input')
     
     # Output destinations
     output_group = parser.add_argument_group('Output options')
     output_mutex = output_group.add_mutually_exclusive_group()
     output_mutex.add_argument('--output-file', help='Path to output CSV file')
-    output_mutex.add_argument('--output-table', help='Database table name for output')
+    output_mutex.add_argument('--output-table', default='prediction_results', help='Database table name for output')
     
     # Database connection
     db_group = parser.add_argument_group('Database connection')
@@ -236,9 +236,22 @@ if __name__ == "__main__":
     # Category argument for single transactions
     single_group.add_argument('--category', choices=['entertainment', 'grocery_pos', 'misc_net', 'travel'],
                                help="Transaction category (e.g., entertainment, grocery_pos)")
-    
+
+    # Prediction visualizations save path
+    parser.add_argument(
+        '--prediction-visuals-path',
+        required=True,
+        default=os.getenv('PREDICTION_VISUALS_PATH', '../data/prediction_visuals/'),  # Fallback to ENV var SAVE_MODEL or default value
+        help='Directory where datasets are stored (default: ../data/prediction_visuals/ or ENV var PREDICTION_VISUALS_PATH)'
+    )
+
     # Required args
-    parser.add_argument('--model-path', required=True, help='Path to trained ML model')
+    parser.add_argument(
+        '--model-path',
+        required=True,
+        default=os.getenv('SAVE_MODEL', '../data/fraud_model.pk1'),  # Fallback to ENV var SAVE_MODEL or default value
+        help='Directory where datasets are stored (default: ../data/fraud_model.pkl or ENV var SAVE_MODEL)'
+    )
 
     args = parser.parse_args()
 
@@ -266,4 +279,4 @@ if __name__ == "__main__":
         print(results.to_string(index=False))
     
     if args.output_file or args.output_table:
-        predictor.visualize_results(results)
+        predictor.visualize_results(results, args.prediction_visuals_path)
