@@ -17,11 +17,11 @@ class FraudPredictionCLI:
 
     def predict(self, args):
         input_source = self._get_input_source(args)
-        features, identifiers = self._preprocess_input(input_source, args)
+        features, identifiers, categories = self._preprocess_input(input_source, args)
         self._validate_input(features)
         
         probabilities = self.model.predict_proba(features)[:, 1]
-        return self._format_results(features, identifiers, probabilities)
+        return self._format_results(features, identifiers, probabilities, categories)
 
     def _validate_input(self, input_data):
         missing = set(self.required_features) - set(input_data.columns)
@@ -94,17 +94,20 @@ class FraudPredictionCLI:
         identifiers = df[['trans_num']] if 'trans_num' in df.columns else None
         
         # Include one-hot encoded category columns dynamically
-        category_columns = [col for col in df.columns if col.startswith('category_')]
+        category_cols = [col for col in df.columns if col.startswith('category_')]
+        if category_cols:
+            df['category'] = df[category_cols].idxmax(axis=1).str.replace('category_', '')
         
-        features = df[self.required_features + category_columns]
+        features = df[self.required_features + category_cols]
         
-        return features, identifiers
+        return features, identifiers, df.get('category', None)
 
-    def _format_results(self, features, identifiers, probabilities):
+    def _format_results(self, features, identifiers, probabilities, categories):
         results = pd.DataFrame({
             'fraud_probability': probabilities,
             'amt': features['amt'],  # Add amt from processed features
-            'city_pop': features['city_pop']  # Add city_pop
+            'city_pop': features['city_pop'],  # Add city_pop
+            'category': categories  # Add original category
         })
         if identifiers is not None:
             results = pd.concat([identifiers.reset_index(drop=True), results], axis=1)
@@ -167,6 +170,17 @@ class FraudPredictionCLI:
         print("- fraud_probability_histogram.png")
         print("- correlation_heatmap.png")
         print("- scatter_plot_amt_vs_fraud.png")
+
+        # Pie Chart: Fraud Probability by Category
+        plt.figure(figsize=(10, 8))
+        category_counts = results.groupby('category')['fraud_probability'].mean()
+        plt.pie(category_counts, 
+                labels=category_counts.index,
+                autopct=lambda pct: f"{pct:.1f}%\n({category_counts.mean():.2f})",
+                startangle=90)
+        plt.title('Average Fraud Probability by Transaction Category')
+        plt.savefig(os.path.join(save_path, 'category_fraud_pie.png'))
+        
 
 if __name__ == "__main__":
     # Parse command-line arguments
@@ -236,24 +250,20 @@ if __name__ == "__main__":
     engine = None
     if args.db_host:
         engine = create_engine(f"postgresql+psycopg2://{args.db_user}:{args.db_pass}@{args.db_host}/{args.db_name}")
+
+    # Run prediction
+    predictor = FraudPredictionCLI(args.model_path, engine)
+    results = predictor.predict(args)
     
-    try:
-        predictor = FraudPredictionCLI(args.model_path, engine)
-        results = predictor.predict(args)
-        
-        if args.output_file:
-            results.to_csv(args.output_file, index=False)
-            print(f"Predictions saved to {args.output_file}")
-        elif args.output_table:
-            results.to_sql(args.output_table, engine, if_exists='replace', index=False)
-            print(f"Predictions saved to database table {args.output_table}")
-        else:
-            print("Fraud Probability Results:")
-            print(results.to_string(index=False))
-        
-        if args.output_file or args.output_table:
-            predictor.visualize_results(results)
-            
-    except Exception as e:
-        print(f"Error: {str(e)}")
-        exit(1)
+    if args.output_file:
+        results.to_csv(args.output_file, index=False)
+        print(f"Predictions saved to {args.output_file}")
+    elif args.output_table:
+        results.to_sql(args.output_table, engine, if_exists='replace', index=False)
+        print(f"Predictions saved to database table {args.output_table}")
+    else:
+        print("Fraud Probability Results:")
+        print(results.to_string(index=False))
+    
+    if args.output_file or args.output_table:
+        predictor.visualize_results(results)
