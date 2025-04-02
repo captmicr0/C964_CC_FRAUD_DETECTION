@@ -27,6 +27,8 @@ services:
     volumes:
       - ../data/kaggle.json:/root/.kaggle/kaggle.json
       - ../data:/app/data  # Mount the data directory for dataset access if needed
+    stdin_open: true # docker run -i
+    tty: true        # docker run -t
 
 volumes:
   postgres_data:
