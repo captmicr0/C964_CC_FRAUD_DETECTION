@@ -13,7 +13,8 @@ from xgboost import XGBClassifier
 from sklearn.metrics import (classification_report, 
                             roc_curve, 
                             roc_auc_score,
-                            confusion_matrix)
+                            confusion_matrix,
+                            accuracy_score)
 from imblearn.over_sampling import SMOTE
 import joblib
 
@@ -24,7 +25,7 @@ class FraudDetector:
         )
 
         self.model = None
-        self.features = None
+        self.model_smote = None
 
         self.eda_visuals_path = eda_visuals_path
         self.model_visuals_path = model_visuals_path
@@ -73,18 +74,31 @@ class FraudDetector:
         plt.savefig(os.path.join(self.eda_visuals_path, fn))
         plt.close()
 
-    def train_model(self, test_size=0.2, train_table='fraud_train', test_table='fraud_test'):
+    def _init_model(self, model_type):
+        if model_type == 'randomforest':
+            return RandomForestClassifier(
+                n_estimators=100,
+                n_jobs=-1, # Use all CPU cores
+                random_state=42,
+                verbose=1  # Enables built-in progress tracking
+            )
+        
+        # fallback is always xgboost
+        return XGBClassifier(
+            scale_pos_weight=100,
+            learning_rate=0.01,
+            max_depth=5,
+            verbose=1  # Enables built-in progress tracking
+        )
+    
+    def train_model(self, test_size=0.2, model_type='xgboost', train_table='fraud_train', test_table='fraud_test'):
         """Train and evaluate model with class balancing"""
         # Load data and select features
         df_train, df_test = self.load_data(train_table, test_table)
         X_train, y_train, X_test, y_test = self.feature_engineering(df_train, df_test)
         
         # Model training
-        self.model = XGBClassifier(
-            scale_pos_weight=100,
-            learning_rate=0.01,
-            max_depth=5
-        )
+        self.model = self._init_model(model_type)
         self.model.fit(X_train, y_train)
 
         # Predict test data
@@ -94,6 +108,7 @@ class FraudDetector:
         print("\nModel Evaluation:")
         print(classification_report(y_test, prediction))
         print(f"AUC-ROC Score: {roc_auc_score(y_test, prediction):.2f}")
+        print(f"Accuracy: {accuracy_score(y_test, prediction):.2f}")
 
         self._plot_roc_curve(y_test, self.model.predict_proba(X_test)[:,1])
         self._plot_confusion_matrix(y_test, prediction)
@@ -103,18 +118,20 @@ class FraudDetector:
         smote = SMOTE(sampling_strategy="auto", random_state=42)
         X_res, y_res = smote.fit_resample(X_train, y_train)
 
-        self.model.fit(X_res, y_res)
+        self.model_smote = self._init_model(model_type)
+        self.model_smote.fit(X_res, y_res)
 
-        prediction_smote = self.model.predict(X_test)
+        prediction_smote = self.model_smote.predict(X_test)
 
         # Re-evaluate and create visualizations
         print("\nBalanced Model Evaluation (SMOTE):")
         print(classification_report(y_test, prediction_smote))
         print(f"AUC-ROC Score: {roc_auc_score(y_test, prediction_smote):.2f}")
+        print(f"Accuracy: {accuracy_score(y_test, prediction_smote):.2f}")
 
-        self._plot_roc_curve(y_test, self.model.predict_proba(X_test)[:,1], fn='roc_curve.SMOTE.png')
-        self._plot_confusion_matrix(y_test, prediction_smote, fn='confusion_matrix.SMOTE.png')
-        self._plot_feature_importance(X_res, fn='feature_importance.SMOTE.png')
+        self._plot_roc_curve(y_test, self.model_smote.predict_proba(X_test)[:,1], fn='SMOTE.roc_curve.png')
+        self._plot_confusion_matrix(y_test, prediction_smote, fn='SMOTE.confusion_matrix.png')
+        self._plot_feature_importance(X_res, fn='SMOTE.feature_importance..png')
     
     def feature_engineering(self, df_train, df_test):
         # Drop columns that are not important
@@ -234,9 +251,14 @@ class FraudDetector:
         plt.close()
 
     def save_model(self, path):
-        """Save trained model"""
-        joblib.dump(self.model, path)
-        print(f"Model saved to {path}")
+        """Save trained models"""
+        model_path = os.path.join(path, 'model.pkl')
+        joblib.dump(self.model, model_path)
+        print(f"Model saved to {model_path}")
+
+        smote_model_path = os.path.join(path, 'smote_model.pkl')
+        joblib.dump(self.model, smote_model_path)
+        print(f"SMOTE Model saved to {smote_model_path}")
     
 if __name__ == "__main__":
     # Parse command-line arguments
@@ -268,23 +290,29 @@ if __name__ == "__main__":
         help='Database password (can fallback to ENV var DB_PASS)'
     )
     parser.add_argument(
-        '--save-model', 
-        default=os.getenv('SAVE_MODEL', '../data/fraud_model.pkl'),  # Fallback to ENV var SAVE_MODEL or default value
-        help='Directory where datasets are stored (default: ../data/fraud_model.pkl or ENV var SAVE_MODEL)'
+        '--model-type',
+        choices=['xgboost', 'randomforsest'],
+        default=os.getenv('MODEL_TYPE', 'randomforsest'),  # Fallback to ENV var MODEL_PATH or default value
+        help='Model type (default: randomforsest or ENV var MODEL_TYPE)'
+    )
+    parser.add_argument(
+        '--model-path', 
+        default=os.getenv('MODEL_PATH', '../data/model/'),  # Fallback to ENV var MODEL_PATH or default value
+        help='Directory where datasets are stored (default: ../data/model/ or ENV var MODEL_PATH)'
     )
     
     # Visualizations save path
     parser.add_argument(
         '--eda-visuals-path',
         default=os.getenv('EDA_VISUALS_PATH', '../data/eda_visuals/'),  # Fallback to ENV var EDA_VISUALS_PATH or default value
-        help='Directory where datasets are stored (default: ../data/eda_visuals/ or ENV var EDA_VISUALS_PATH)'
+        help='Directory where EDA visuals are stored (default: ../data/eda_visuals/ or ENV var EDA_VISUALS_PATH)'
     )
 
     # Visualizations save path
     parser.add_argument(
         '--model-visuals-path',
         default=os.getenv('MODEL_VISUALS_PATH', '../data/model_visuals/'),  # Fallback to ENV var MODEL_VISUALS_PATH or default value
-        help='Directory where datasets are stored (default: ../data/model_visuals/ or ENV var MODEL_VISUALS_PATH)'
+        help='Directory where model visuals are stored (default: ../data/model_visuals/ or ENV var MODEL_VISUALS_PATH)'
     )
     
     args = parser.parse_args()
@@ -293,4 +321,4 @@ if __name__ == "__main__":
     detector = FraudDetector(args.db_user, args.db_pass, args.db_host, args.db_name,
                              args.eda_visuals_path, args.model_visuals_path)
     detector.train_model()
-    detector.save_model(args.save_model)
+    detector.save_model(args.model_path)
