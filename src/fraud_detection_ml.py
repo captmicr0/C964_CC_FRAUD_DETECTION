@@ -78,10 +78,6 @@ class FraudDetector:
         # Load data and select features
         df_train, df_test = self.load_data(train_table, test_table)
         X_train, y_train, X_test, y_test = self.feature_engineering(df_train, df_test)
-
-        # Handle imbalance
-        smote = SMOTE(sampling_strategy="auto", random_state=42)
-        X_res, y_res = smote.fit_resample(X_train, y_train)
         
         # Model training
         self.model = XGBClassifier(
@@ -101,7 +97,26 @@ class FraudDetector:
 
         self._plot_roc_curve(y_test, self.model.predict_proba(X_test)[:,1])
         self._plot_confusion_matrix(y_test, prediction)
+        self._plot_feature_importance(X_train)
 
+        # Handle imbalance with SMOTE
+        smote = SMOTE(sampling_strategy="auto", random_state=42)
+        X_res, y_res = smote.fit_resample(X_train, y_train)
+
+        self.model.fit(X_res, y_res)
+
+        prediction_smote = self.model.predict(X_test)
+
+        # Re-evaluate and create visualizations
+        print("\nBalanced Model Evaluation (SMOTE):")
+        print(classification_report(y_test, prediction_smote))
+        print(f"AUC-ROC Score: {roc_auc_score(y_test, prediction_smote):.2f}")
+
+        self._plot_roc_curve(y_test, self.model.predict_proba(X_test)[:,1], fn='roc_curve.SMOTE.png')
+        self._plot_confusion_matrix(y_test, prediction_smote, fn='confusion_matrix.SMOTE.png')
+        self._plot_feature_importance(X_res, fn='feature_importance.SMOTE.png')
+
+        # Create feature importance visual
         self._plot_feature_importance(X_train)
     
     def feature_engineering(self, df_train, df_test):
