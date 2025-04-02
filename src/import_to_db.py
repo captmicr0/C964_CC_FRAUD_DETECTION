@@ -20,7 +20,7 @@ class CSVImporter:
             df.drop(columns=['Unnamed: 0'], inplace=True)
         if 'is_fraud' in df.columns:
             df['is_fraud'] = df['is_fraud'].astype(bool)
-        if 'merchant' in df.column:
+        if 'merchant' in df.columns:
             df['merchant'] = df['merchant'].str.replace('fraud_', '', regex=False)
         return df
     
