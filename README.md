@@ -53,9 +53,7 @@ Ensure you have the following installed on your system:
 3. Place the `kaggle.json` file in one of these locations:
    - Linux/Mac: `~/.kaggle/kaggle.json`
    - Windows: `%HOMEPATH%/.kaggle/kaggle.json`
-   - Docker: do one of the following
-     - set the environtment variables `KAGGLE_USER` and `KAGGLE_KEY` with the information from `kaggle.json`
-     - bind-mount `kaggle.json` to `~/.kaggle/kaggle.json` using `-v kaggle.json:~/.kaggle/kaggle.json`
+   - Docker: place `kaggle.json` in the `data` subdirectory
 
 ### Steps to Run via Docker Compose (easiest option)
 1. Clone this repository:
@@ -65,24 +63,33 @@ cd C964_CC_FRAUD_DETECTION
 cd docker
 ```
 
-2. Build and start all services (application and PostgreSQL) using `docker-compose`:
+2. Build and start all services (application and PostgreSQL) using `docker compose`:
 ```
-docker-compose up --build
+docker compose build
+docker compose up -d
 ```
 
-3. Once all services are running:
-- The application container will automatically download the dataset using Kaggle API.
-- It will import the dataset into the PostgreSQL database.
-- It will being training the model(s) and verifying them.
-- It will output EDA and model visualizations to the data directory
-- It will save the model artifacts in the data directory for later use (see below)
+3. Attach the the fraud-detection-app service to get an interactive terminal:
+```
+docker compose exec fraud-detection-app bash
+```
 
-4. To make predictions:
-- Open a terminal session in the application container:
-  ```
-  docker exec -it fraud-detection-app bash
-  ```
-- Run predictions:
+4. Download and import the dataset into the PostgreSQL Database:
+```
+python import_to_db.py --data-dir /app/data/
+```
+  - The application will automatically download the dataset using Kaggle API.
+  - It will import the dataset into the PostgreSQL database.
+
+5. Train and evaluate the ML model:
+```
+python fraud_detection_ml.py --model-type randomforest --model-path /app/data/model --eda-visuals-path /app/data/eda_visuals --model-visuals-path /app/data/model_visuals
+```
+  - It will being training the model(s) and evaluating them.
+  - It will output EDA visualizations and model visualizations to the data directory
+  - It will save the model artifacts in the data directory for later use (see below)
+
+6. Run some predictions:
   Examples:
   ```
   python predict_fraud.py --amount 1077.69 --hour 22 --day 21 --month 6 --cc-bin 400567 --street "458 Phillips Island Apt. 768" --city "Denham Springs" --state LA --zip 70726 --city-pop 71335 --dob 1994-05-31 --gender M --job "Herbalist" --lat 30.459 --long -90.9027 --merchant "Heathcote, Yost and Kertzmann" --merch-lat 31.204974 --merch-long -90.261595 --category shopping_net
@@ -94,7 +101,7 @@ docker-compose up --build
   python predict_fraud.py --amount 843.91 --hour 23 --day 2 --month 1 --cc-bin 461331 --street "542 Steve Curve Suite 011" --city "Collettsville" --state NC --zip 28611 --city-pop 885 --dob 1988-09-15 --gender M --job "Soil scientist" --lat 35.9946 --long -81.7266 --merchant "Ruecker Group" --merch-lat 35.985612 --merch-long -81.383306 --category misc_net
   ```
 
-4. Stop all services when done:
+7. Stop all services when done:
 ```
 docker-compose down
 ```

@@ -184,7 +184,7 @@ if __name__ == "__main__":
         'kartik2112/fraud-detection',
         path=args.data_dir,
         unzip=True,
-        quiet=False
+        quiet=True
     )
     
     # Initialize importers

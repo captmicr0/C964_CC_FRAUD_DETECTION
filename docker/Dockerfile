@@ -11,9 +11,5 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy application source code into the container
 COPY src ./src
 
-# Copy the entrypoint script into the container
-COPY docker/entrypoint.sh /app/entrypoint.sh
-RUN chmod +x /app/entrypoint.sh
-
 # Set the entrypoint script
-ENTRYPOINT ["/app/entrypoint.sh"]
+CMD ["sleep", "infinity"]
