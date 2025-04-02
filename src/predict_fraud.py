@@ -241,7 +241,7 @@ if __name__ == "__main__":
     parser.add_argument(
         '--prediction-visuals-path',
         required=True,
-        default=os.getenv('PREDICTION_VISUALS_PATH', '../data/prediction_visuals/'),  # Fallback to ENV var SAVE_MODEL or default value
+        default=os.getenv('PREDICTION_VISUALS_PATH', '../data/prediction_visuals/'),  # Fallback to ENV var PREDICTION_VISUALS_PATH or default value
         help='Directory where datasets are stored (default: ../data/prediction_visuals/ or ENV var PREDICTION_VISUALS_PATH)'
     )
 
