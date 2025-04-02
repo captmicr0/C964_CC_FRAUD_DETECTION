@@ -25,6 +25,9 @@ class FraudDetector:
             f"postgresql+psycopg2://{db_user}:{db_pass}@{db_host}/{db_name}"
         )
 
+        self.label_encoder = None
+        self.scaler = None
+
         self.model = None
         self.model_smote = None
 
@@ -139,9 +142,9 @@ class FraudDetector:
         print(f"AUC-ROC Score: {roc_auc_score(y_test, prediction):.2f}")
         print(f"Accuracy: {accuracy_score(y_test, prediction):.2f}")
 
-        self._plot_roc_curve(y_test, self.model.predict_proba(X_test)[:,1])
-        self._plot_confusion_matrix(y_test, prediction)
-        self._plot_feature_importance(X_train)
+        self._plot_roc_curve(y_test, self.model.predict_proba(X_test)[:,1], fn='unbalanced.roc_curve.png')
+        self._plot_confusion_matrix(y_test, prediction, fn='unbalanced.confusion_matrix.png')
+        self._plot_feature_importance(X_train, fn='unbalanced.feature_importance..png')
 
         # Handle imbalance with SMOTE
         print()
@@ -162,9 +165,9 @@ class FraudDetector:
         print(f"AUC-ROC Score: {roc_auc_score(y_test, prediction_smote):.2f}")
         print(f"Accuracy: {accuracy_score(y_test, prediction_smote):.2f}")
 
-        self._plot_roc_curve(y_test, self.model_smote.predict_proba(X_test)[:,1], fn='SMOTE.roc_curve.png')
-        self._plot_confusion_matrix(y_test, prediction_smote, fn='SMOTE.confusion_matrix.png')
-        self._plot_feature_importance(X_res, fn='SMOTE.feature_importance..png')
+        self._plot_roc_curve(y_test, self.model_smote.predict_proba(X_test)[:,1], fn='balanced.roc_curve.png')
+        self._plot_confusion_matrix(y_test, prediction_smote, fn='balanced.confusion_matrix.png')
+        self._plot_feature_importance(X_res, fn='balanced.feature_importance..png')
     
     def feature_engineering(self, df_train, df_test):
         # Initialize progress bar with a placeholder total
@@ -215,23 +218,23 @@ class FraudDetector:
         pbar.refresh()  # Refresh the progress bar to reflect the new total
 
         # Convert categories into usable data
-        label_encoder = LabelEncoder()
+        self.label_encoder = LabelEncoder()
         for col in categorical_cols:
             # avoid unseen labels
             combined = pd.concat([X_train[col], X_test[col]])
-            label_encoder.fit(combined)
+            self.label_encoder.fit(combined)
 
             # transform data
-            X_train[col] = label_encoder.transform(X_train[col])
-            X_test[col] = label_encoder.transform(X_test[col])
+            X_train[col] = self.label_encoder.transform(X_train[col])
+            X_test[col] = self.label_encoder.transform(X_test[col])
 
             pbar.update(1)
         pbar.update(1)
         
         # Scale features
-        scaler = StandardScaler()
-        X_train[numerical_cols] = scaler.fit_transform(X_train[numerical_cols])
-        X_test[numerical_cols] = scaler.transform(X_test[numerical_cols])  # for test data don't use fit_transform
+        self.scaler = StandardScaler()
+        X_train[numerical_cols] = self.scaler.fit_transform(X_train[numerical_cols])
+        X_test[numerical_cols] = self.scaler.transform(X_test[numerical_cols])  # for test data don't use fit_transform
         pbar.update(1)
 
         # Make sure both sets of data have matching columns
@@ -300,19 +303,38 @@ class FraudDetector:
         plt.savefig(os.path.join(self.model_visuals_path, fn))
         plt.close()
 
-    def save_model(self, path):
-        """Save trained models"""
-        print("Saving models...")
+    def save_artifacts(self, path):
+        """Save model artifacts"""
+        # Initialize progress bar with a placeholder total
+        pbar = tqdm(total=4, desc="Saving Model Artifacts", unit="step")
+
         # Ensure the save path exists
         os.makedirs(path, exist_ok=True)
+        
+        # Save label encoder
+        label_encoder_path = os.path.join(path, 'label_encoder.pkl')
+        joblib.dump(self.label_encoder, label_encoder_path)
+        pbar.update(1)
 
+        # Save scaler
+        scaler_path = os.path.join(path, 'scaler.pkl')
+        joblib.dump(self.scaler, scaler_path)
+        pbar.update(1)
+
+        # Save unbalanced model
         model_path = os.path.join(path, 'model.pkl')
         joblib.dump(self.model, model_path)
-        print(f"Model saved to {model_path}")
+        pbar.update(1)
 
-        smote_model_path = os.path.join(path, 'smote_model.pkl')
-        joblib.dump(self.model, smote_model_path)
-        print(f"Balanced model saved to {smote_model_path}")
+        # Save balanced model
+        balanced_model_path = os.path.join(path, 'balanced_model.pkl')
+        joblib.dump(self.model, balanced_model_path)
+        pbar.update(1)
+
+        print(f"Label Encoder saved to {label_encoder_path}")
+        print(f"Scaler saved to {scaler_path}")
+        print(f"Model saved to {model_path}")
+        print(f"Balanced Model saved to {balanced_model_path}")
     
 if __name__ == "__main__":
     # Parse command-line arguments
@@ -376,4 +398,4 @@ if __name__ == "__main__":
                              args.eda_visuals_path, args.model_visuals_path)
     detector.train_model(model_type=args.model_type)
     print()
-    detector.save_model(args.model_path)
+    detector.save_artifacts(args.model_path)
