@@ -201,7 +201,6 @@ if __name__ == "__main__":
     # Visualizations save path
     parser.add_argument(
         '--eda-visuals-path',
-        required=True,
         default=os.getenv('EDA_VISUALS_PATH', '../data/eda_visuals/'),  # Fallback to ENV var EDA_VISUALS_PATH or default value
         help='Directory where datasets are stored (default: ../data/eda_visuals/ or ENV var EDA_VISUALS_PATH)'
     )
@@ -209,7 +208,6 @@ if __name__ == "__main__":
     # Visualizations save path
     parser.add_argument(
         '--model-visuals-path',
-        required=True,
         default=os.getenv('MODEL_VISUALS_PATH', '../data/model_visuals/'),  # Fallback to ENV var MODEL_VISUALS_PATH or default value
         help='Directory where datasets are stored (default: ../data/model_visuals/ or ENV var MODEL_VISUALS_PATH)'
     )

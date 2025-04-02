@@ -240,7 +240,6 @@ if __name__ == "__main__":
     # Prediction visualizations save path
     parser.add_argument(
         '--prediction-visuals-path',
-        required=True,
         default=os.getenv('PREDICTION_VISUALS_PATH', '../data/prediction_visuals/'),  # Fallback to ENV var PREDICTION_VISUALS_PATH or default value
         help='Directory where datasets are stored (default: ../data/prediction_visuals/ or ENV var PREDICTION_VISUALS_PATH)'
     )
@@ -248,7 +247,6 @@ if __name__ == "__main__":
     # Required args
     parser.add_argument(
         '--model-path',
-        required=True,
         default=os.getenv('SAVE_MODEL', '../data/fraud_model.pkl'),  # Fallback to ENV var SAVE_MODEL or default value
         help='Directory where datasets are stored (default: ../data/fraud_model.pkl or ENV var SAVE_MODEL)'
     )
