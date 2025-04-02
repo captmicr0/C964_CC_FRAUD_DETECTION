@@ -21,9 +21,9 @@ This project focuses on building a machine learning-based system to detect fraud
 
 ## Technologies Used
 - **Programming Language**: Python
-- **Libraries**: TBD (potentially: Pandas, NumPy, Scikit-learn, XGBoost, Matplotlib, Imbalanced-learn, SQLAlchemy, Psycopg2, Kagglehub)
+- **Libraries**: pandas, sqlalchemy, psycopg2-binary, kaggle, tqdm, numpy, matplotlib, seaborn, scikit-learn, xgboost, imblearn, joblib
 - **Database**: PostgreSQL
-- **Tools**: VSCode, pgAdmin, Docker, Docker-Compose, Git
+- **Tools**: VSCode, pgAdmin, Docker, Docker Compose, Git
 
 ## Dataset
 The project uses the publicly available [Kaggle Credit Card Fraud Detection Dataset](https://www.kaggle.com/datasets/kartik2112/fraud-detection). The dataset will be downloaded automatically using the Kaggle API via the `kagglehub` Python module.
@@ -42,7 +42,7 @@ The project uses the publicly available [Kaggle Credit Card Fraud Detection Data
 
 ### Prerequisites
 Ensure you have the following installed on your system:
-- Python 3.8+
+- Python 3.13+
 - PostgreSQL
 - Docker
 - Docker-Compose
