@@ -4,6 +4,7 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
+from tqdm import tqdm
 from sqlalchemy import create_engine
 from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestClassifier
@@ -36,21 +37,33 @@ class FraudDetector:
         
     def load_data(self, train_table, test_table):
         """Load and preprocess data from PostgreSQL"""
+        print("Loading training data...")
         query = f"SELECT * FROM {train_table}"
-        df_train = pd.read_sql(query, self.engine)
+        chunks = []
+        with tqdm(desc="Loading Train Data", unit="rows") as pbar:
+            for chunk in pd.read_sql(query, self.engine, chunksize=1000):  # Load in chunks of 1000 rows
+                chunks.append(chunk)
+                pbar.update(len(chunk))
+        df_train = pd.concat(chunks)
+                
         self.visualize_missing_values(df_train)
         self.visualize_is_fraud(df_train['is_fraud'])
 
+        print("Loading testing data...")
         query = f"SELECT * FROM {test_table}"
-        df_test = pd.read_sql(query, self.engine)
+        chunks = []
+        
+        with tqdm(desc="Loading Test Data", unit="rows") as pbar:
+            for chunk in pd.read_sql(query, self.engine, chunksize=1000):  # Load in chunks of 1000 rows
+                chunks.append(chunk)
+                pbar.update(len(chunk))
+        df_test = pd.concat(chunks)
         
         return df_train, df_test
 
     def visualize_missing_values(self, df, fn='missing_values_bar_graph.png'):
         """Generate visualizations for EDA."""
-
         missing_values = df.isnull().sum()
-
         plt.figure(figsize=(10, 6))
         missing_values.plot(kind='bar', color='skyblue')
         plt.title('Missing Values per Column')
@@ -63,7 +76,6 @@ class FraudDetector:
 
     def visualize_is_fraud(self, y, fn='is_fraud_distribution.png'):
         """Generate a bar graph showing the distribution of the target variable (is_fraud)."""
-
         plt.figure(figsize=(8, 6))
         y.value_counts().plot(kind='bar', color=['skyblue', 'orange'])
         plt.title('Distribution of Target Variable (is_fraud)')
@@ -79,18 +91,16 @@ class FraudDetector:
             return RandomForestClassifier(
                 n_estimators=100,
                 n_jobs=-1, # Use all CPU cores
-                random_state=42,
-                verbose=1  # Enables built-in progress tracking
+                random_state=42
             )
         
         # fallback is always xgboost
         return XGBClassifier(
             scale_pos_weight=100,
             learning_rate=0.01,
-            max_depth=5,
-            verbose=1  # Enables built-in progress tracking
+            max_depth=5
         )
-    
+
     def train_model(self, test_size=0.2, model_type='xgboost', train_table='fraud_train', test_table='fraud_test'):
         """Train and evaluate model with class balancing"""
         # Load data and select features
@@ -252,6 +262,9 @@ class FraudDetector:
 
     def save_model(self, path):
         """Save trained models"""
+        # Ensure the save path exists
+        os.makedirs(path, exist_ok=True)
+
         model_path = os.path.join(path, 'model.pkl')
         joblib.dump(self.model, model_path)
         print(f"Model saved to {model_path}")
@@ -320,5 +333,5 @@ if __name__ == "__main__":
     # Train and evaluate model
     detector = FraudDetector(args.db_user, args.db_pass, args.db_host, args.db_name,
                              args.eda_visuals_path, args.model_visuals_path)
-    detector.train_model()
+    detector.train_model(model_type=args.model_type)
     detector.save_model(args.model_path)
