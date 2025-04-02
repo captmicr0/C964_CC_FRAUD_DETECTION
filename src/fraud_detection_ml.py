@@ -115,9 +115,6 @@ class FraudDetector:
         self._plot_roc_curve(y_test, self.model.predict_proba(X_test)[:,1], fn='roc_curve.SMOTE.png')
         self._plot_confusion_matrix(y_test, prediction_smote, fn='confusion_matrix.SMOTE.png')
         self._plot_feature_importance(X_res, fn='feature_importance.SMOTE.png')
-
-        # Create feature importance visual
-        self._plot_feature_importance(X_train)
     
     def feature_engineering(self, df_train, df_test):
         # Drop columns that are not important
