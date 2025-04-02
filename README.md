@@ -124,7 +124,7 @@ docker run --name fraud-db -e POSTGRES_USER=postgres -e POSTGRES_PASSWORD=passwo
 5. Run the scripts for training:
 - For Importing Training Data:
   ```
-  python src/import_to_db.py --db-host localhost --db-name fraud_detection --db-user postgres --db-pass password
+  python import_to_db.py --db-host localhost --db-name fraud_detection --db-user postgres --db-pass password
   ```
 - For Training:
   ```
