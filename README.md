@@ -30,10 +30,11 @@ The project uses the publicly available [Kaggle Credit Card Fraud Detection Data
 
 ## Project Structure
 ```
-├── data/                # Contains dataset files (not included in the repo) and kaggle.json (API key) 
+├── data/                # Stores application data (dataset will be downloaded here)
 │   ├── eda_visuals/     # Contains EDA visuals
 │   ├── model_visuals/   # Contains ML model and evaluation visuals
-│   └── model/           # Contains ML model artifacts
+│   ├── model/           # Contains ML model artifacts
+│   └── kaggle.json      # Kaggle API key (retreived using steps below)
 ├── src/                 # Source code for preprocessing, modeling, and evaluation
 ├── docker/              # Docker-related files (e.g., Dockerfile, docker-compose.yml)
 ├── README.md            # Project documentation (this file)
