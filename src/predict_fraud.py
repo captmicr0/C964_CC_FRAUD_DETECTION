@@ -1,260 +1,223 @@
-import os
 import argparse
+import os
 import pandas as pd
 import joblib
+import numpy as np
+from tqdm import tqdm
 from sqlalchemy import create_engine
+from sklearn.preprocessing import LabelEncoder, StandardScaler
 import matplotlib.pyplot as plt
 import seaborn as sns
+from datetime import datetime
 
 class FraudPredictionCLI:
-    def __init__(self, model_path, db_engine=None):
-        self.model = joblib.load(model_path)
-        self.engine = db_engine
+    def __init__(self, model_path):
+        # Load both model and preprocessing artifacts
+        pbar = tqdm(total=4, desc="Loading Model Artifacts", unit="step")
+        self.model = joblib.load(os.path.join(model_path, 'unbalanced_model.pkl'))
+        pbar.update(1)
+        self.model_smote = joblib.load(os.path.join(model_path, 'balanced_model.pkl'))
+        pbar.update(1)
+        self.label_encoders = joblib.load(os.path.join(model_path, 'label_encoder.pkl'))
+        pbar.update(1)
+        self.scaler = joblib.load(os.path.join(model_path, 'scaler.pkl'))
+        pbar.update(1)
+        
+        # Required features
         self.required_features = [
-            'amt', 'city_pop', 'age', 'trans_hour', 'trans_day',
-            'lat', 'long', 'merch_lat', 'merch_long', 'category', 'gender', 'state'
+            'amt', 'city_pop', 'hour', 'day', 'month',
+            'lat', 'long', 'merch_lat', 'merch_long',
+            'category', 'gender', 'state', 'dob'
         ]
 
-    def predict(self, args):
-        input_source = self._get_input_source(args)
-        features, identifiers = self._preprocess_input(input_source, args)
-        self._validate_input(features)
+    def feature_engineering(self, df_test):
+        """Feature engineering input data to useable data"""
+        # Initialize progress bar with a placeholder total
+        pbar = tqdm(total=7, desc="Feature Engineering", unit="step")
         
-        probabilities = self.model.predict_proba(features)[:, 1]
-        return self._format_results(features, identifiers, probabilities)
+        # Drop columns that are not important
+        # keep: trans_date_trans_time, cc_num,merchant, category, amt, gender, street, city, state, zip, lat, long, city_pop, job, dob, merch_lat, merch_long, is_fraud
+        columns_to_drop = ['trans_num', 'unix_time', 'first', 'last']
+        df_test.drop(columns=columns_to_drop, axis=1, inplace=True, errors='ignore')
+        pbar.update(1)
 
-    def _validate_input(self, input_data):
-        missing = set(self.required_features) - set(input_data.columns)
-        if missing:
-            raise ValueError(f"Missing required features: {missing}")
+        # Choose features and target for the training and test data
+        X_test = df_test.drop('is_fraud', axis=1)  # features
+        if 'is_fraud' in X_test.columns:
+            y_test = df_test['is_fraud']  # target, optional
+        pbar.update(1)
+
+        # Recognize numerical and categorical features in the training data
+        numerical_cols = X_test.select_dtypes(include=[np.number]).columns.tolist()
+        categorical_cols = X_test.select_dtypes(include=['object']).columns.tolist()
+        pbar.update(1)
+
+        # Extract features from transaction date and time, then remove original column
+        if 'trans_date_trans_time' in X_test.columns:
+            X_test['trans_date_trans_time'] = pd.to_datetime(X_test['trans_date_trans_time'])
+            X_test['hour'] = X_test['trans_date_trans_time'].dt.hour
+            X_test['day'] = X_test['trans_date_trans_time'].dt.day
+            X_test['month'] = X_test['trans_date_trans_time'].dt.month
+            X_test.drop('trans_date_trans_time', axis=1, inplace=True, errors='ignore')
+        pbar.update(1)
+
+        # Update after processing
+        categorical_cols = X_test.select_dtypes(include=['object']).columns.tolist()
+        numerical_cols = X_test.select_dtypes(include=[np.number]).columns.tolist()
+        pbar.update(1)
+
+        # Dynamically update total once categorical_cols length is known
+        pbar.total += len(categorical_cols)  # Add the number of categorical columns to the total
+        pbar.refresh()  # Refresh the progress bar to reflect the new total
+
+        # Convert categories into usable data
+        for col in categorical_cols:
+            self.label_encoder.fit(X_test[col])
+            # transform data
+            X_test[col] = self.label_encoder.transform(X_test[col])
+            pbar.update(1)
+        pbar.update(1)
+        
+        # Scale features
+        X_test[numerical_cols] = self.scaler.transform(X_test[numerical_cols])  # for test data don't use fit_transform
+        pbar.update(1)
+        pbar.close()
+
+        print("Feature set of testing data:")
+        print(X_test.columns)
+
+        # Return processed data
+        if 'is_fraud' in X_test.columns:
+            return X_test, y_test
+
+        return X_test, None
     
-    def _get_input_source(self, args):
-        if args.input_file:
-            return ('file', args.input_file)
-        if args.input_table:
-            return ('table', args.input_table)
-        return ('single', None)
-
-    def _preprocess_input(self, input_source, args):
-        source_type, source_value = input_source
-        
-        if source_type == 'file':
-            return self._preprocess_csv(source_value)
-        if source_type == 'table':
-            return self._preprocess_db_table(source_value)
-        return self._preprocess_single(args)
-
-    def _preprocess_single(self, args):
-        data = {
+    def single_to_df(self, args):
+        """Convert a single transaction into a DataFrame."""
+        return pd.DataFrame([{
             'amt': args.amount,
             'city_pop': args.city_pop,
-            'age': args.age,
-            'trans_hour': args.hour,
-            'trans_day': args.day,
+            'hour': args.hour,
+            'day': args.day,
+            'month': args.month,
             'lat': args.lat,
             'long': args.long,
             'merch_lat': args.merch_lat,
             'merch_long': args.merch_long,
             'category': args.category,
             'gender': args.gender,
-            'state': args.state
+            'state': args.state,
+            'dob': args.dob
+        }])
+
+    def predict_single(self, args):
+        """Make a prediction using the trained model."""
+        # Convert a single transaction into a DataFrame
+        single_df = pd.DataFrame([{
+            'amt': args.amount,
+            'city_pop': args.city_pop,
+            'hour': args.hour,
+            'day': args.day,
+            'month': args.month,
+            'lat': args.lat,
+            'long': args.long,
+            'merch_lat': args.merch_lat,
+            'merch_long': args.merch_long,
+            'category': args.category,
+            'gender': args.gender,
+            'state': args.state,
+            'dob': args.dob
+        }])
+
+        # Feature engineering on input data
+        X_test, y_test = self.feature_engineering(single_df)
+        
+        # Make a prediction using the model
+        prediction = self.model.predict(X_test)
+        probabilities = self.model.predict_proba(X_test)[:, 1]  # Probability of fraud
+        
+        print(f"Prediction: {'Fraudulent' if result['prediction'] == 1 else 'Non-Fraudulent'}")
+        print(f"Probability of Fraud: {result['probability_of_fraud']:.2f}")
+
+        return {
+            "prediction": int(prediction[0]),  # 0: Non-fraudulent, 1: Fraudulent
+            "probability_of_fraud": probabilities[0]
         }
-        
-        return pd.DataFrame([data])
-
-    def _preprocess_csv(self, file_path):
-        df = pd.read_csv(file_path, parse_dates=['trans_date_trans_time', 'dob'])
-
-        # One-hot encode the category column for batch processing
-        df = pd.get_dummies(df, columns=['category'], prefix='category')
-
-        return self._process_common_features(df)
-
-    def _preprocess_db_table(self, table_name):
-        query = f"SELECT * FROM {table_name}"
-        df = pd.read_sql(query, self.engine)
-
-        return self._process_common_features(df)
-
-    def _process_common_features(self, df):
-        df['trans_hour'] = df['trans_date_trans_time'].dt.hour
-        df['trans_day'] = df['trans_date_trans_time'].dt.dayofweek
-        df['age'] = (pd.to_datetime('today') - pd.to_datetime(df['dob'])).dt.days // 365
-        
-        identifiers = df[['trans_num']] if 'trans_num' in df.columns else None
-        
-        features = df[self.required_features]
-        
-        return features, identifiers
-
-    def _format_results(self, features, identifiers, probabilities):
-        results = pd.DataFrame({
-            'fraud_probability': probabilities,
-            'amt': features['amt'],  # Add amt from processed features
-            'city_pop': features['city_pop'],  # Add city_pop
-            'category': features['category']  # Add original category
-        })
-        if identifiers is not None:
-            results = pd.concat([identifiers.reset_index(drop=True), results], axis=1)
-        return results
     
     @staticmethod
-    def visualize_results(results, save_path):
-        """Generate visualizations for batch results."""
+    def visualize_data(df, prediction_visuals_path):
+        """Generate visualizations for fraud analysis."""
         
-        # Ensure the save path exists
-        os.makedirs(save_path, exist_ok=True)
-
-        # Pie Chart: Fraud Risk Distribution
-        bins = [0, 30, 70, 100]
-        labels = ['Low Risk', 'Medium Risk', 'High Risk']
-        results['Risk Level'] = pd.cut(results['fraud_probability'] * 100, bins=bins, labels=labels)
-        
-        risk_counts = results['Risk Level'].value_counts()
-        
-        plt.figure(figsize=(8, 8))
-        plt.pie(risk_counts, labels=risk_counts.index, autopct='%1.1f%%', colors=['green', 'orange', 'red'])
-        plt.title('Fraud Risk Distribution')
-        plt.savefig(os.path.join(save_path, 'fraud_risk_pie_chart.png'))
-        
-        # Histogram: Fraud Probability Distribution
+        # 1. Distribution of Transaction Amounts (Fraud vs Non-Fraud)
         plt.figure(figsize=(10, 6))
-        plt.hist(results['fraud_probability'] * 100, bins=10, color='blue', alpha=0.7)
-        plt.xlabel('Fraud Probability (%)')
-        plt.ylabel('Number of Transactions')
-        plt.title('Distribution of Fraud Probabilities')
-        plt.savefig(os.path.join(save_path, 'fraud_probability_histogram.png'))
-        
-        # Heatmap: Correlation Matrix
-        correlation_data = results[['amt', 'city_pop', 'fraud_probability', 'category']]
-        
-        corr_matrix = correlation_data.corr()
-        
-        plt.figure(figsize=(8, 6))
-        sns.heatmap(corr_matrix, annot=True, cmap='coolwarm', fmt='.2f')
-        plt.title('Correlation Heatmap')
-        plt.savefig(os.path.join(save_path, 'correlation_heatmap.png'))
-        
-        # Scatter Plot: Transaction Amount vs Fraud Probability
-        plt.figure(figsize=(10, 6))
-        sns.scatterplot(
-            x='amt',
-            y='fraud_probability',
-            data=results,
-            hue='Risk Level',
-            palette={'Low Risk': 'green', 'Medium Risk': 'orange', 'High Risk': 'red'}
-        )
-        plt.xlabel('Transaction Amount ($)')
-        plt.ylabel('Fraud Probability (%)')
-        plt.title('Transaction Amount vs Fraud Probability')
-        plt.legend(title='Risk Level')
-        plt.savefig(os.path.join(save_path, 'scatter_plot_amt_vs_fraud.png'))
+        sns.histplot(data=df, x='amt', hue='is_fraud', kde=True, bins=50)
+        plt.title('Distribution of Transaction Amounts (Fraud vs Non-Fraud)')
+        plt.xlabel('Transaction Amount')
+        plt.ylabel('Frequency')
+        plt.legend(title='Fraudulent Transaction', labels=['Non-Fraudulent', 'Fraudulent'])
+        plt.savefig(os.path.join(prediction_visuals_path, 'amount_distribution.png'))
+        plt.close()
 
-        # Pie Chart: Fraud Probability by Category
-        plt.figure(figsize=(10, 8))
-        category_counts = results.groupby('category')['fraud_probability'].mean()
-        plt.pie(category_counts, 
-                labels=category_counts.index,
-                autopct=lambda pct: f"{pct:.1f}%\n({category_counts.mean():.2f})",
-                startangle=90)
-        plt.title('Average Fraud Probability by Transaction Category')
-        plt.savefig(os.path.join(save_path, 'category_fraud_pie.png'))
-        
+        # 2. Heatmap of Correlation Between Features
+        plt.figure(figsize=(12, 8))
+        correlation_matrix = df.corr()
+        sns.heatmap(correlation_matrix, annot=True, cmap='coolwarm')
+        plt.title('Correlation Matrix of Features')
+        plt.savefig(os.path.join(prediction_visuals_path, 'feature_correlation.png'))
+        plt.close()
+
+        # 3. Geographic Distribution of Fraudulent Transactions
+        plt.figure(figsize=(10, 6))
+        fraud_df = df[df['is_fraud'] == 1]
+        plt.scatter(fraud_df['long'], fraud_df['lat'], alpha=0.5, c='red')
+        plt.title('Geographic Distribution of Fraudulent Transactions')
+        plt.xlabel('Longitude')
+        plt.ylabel('Latitude')
+        plt.savefig(os.path.join(prediction_visuals_path, 'geographic_distribution.png'))
+        plt.close()
 
 if __name__ == "__main__":
-    # Parse command-line arguments
     parser = argparse.ArgumentParser(description='Fraud Prediction System')
     
-    # Input sources
-    input_group = parser.add_argument_group('Input options')
-    input_mutex = input_group.add_mutually_exclusive_group()
-    input_mutex.add_argument('--input-file', help='Path to input CSV file')
-    input_mutex.add_argument('--input-table', default='fraud_test', help='Database table name for input')
-    
-    # Output destinations
-    output_group = parser.add_argument_group('Output options')
-    output_mutex = output_group.add_mutually_exclusive_group()
-    output_mutex.add_argument('--output-file', help='Path to output CSV file')
-    output_mutex.add_argument('--output-table', default='prediction_results', help='Database table name for output')
-    
-    # Database connection
-    db_group = parser.add_argument_group('Database connection')
-    parser.add_argument(
-        '--db-host', 
-        default=os.getenv('DB_HOST'),
-        help='PostgreSQL host (can fallback to ENV var DB_HOST)'
-    )
-    parser.add_argument(
-        '--db-name', 
-        default=os.getenv('DB_NAME'),
-        help='Database name (can fallback to ENV var DB_NAME)'
-    )
-    parser.add_argument(
-        '--db-user', 
-        default=os.getenv('DB_USER'),
-        help='Database user (can fallback to ENV var DB_USER)'
-    )
-    parser.add_argument(
-        '--db-pass', 
-        default=os.getenv('DB_PASS'),
-        help='Database password (can fallback to ENV var DB_PASS)'
-    )
-    
-    # Single transaction args
-    single_group = parser.add_argument_group('Single transaction')
-    single_group.add_argument('--amount', type=float, help='Transaction amount')
-    single_group.add_argument('--sate', type=float, help='Customer state')
-    single_group.add_argument('--city-pop', type=int, help='City population')
-    single_group.add_argument('--age', type=int, help='Customer age')
-    single_group.add_argument('--gender', type=float, help='Customer gender')
-    single_group.add_argument('--hour', type=int, help='Transaction hour (0-23)')
-    single_group.add_argument('--day', type=int, help='Transaction day (0-6)')
-    single_group.add_argument('--lat', type=float, help='Customer latitude')
-    single_group.add_argument('--long', type=float, help='Customer longitude')
-    single_group.add_argument('--merch-lat', type=float, help='Merchant latitude')
-    single_group.add_argument('---merch-category', type=float, help='Merchant Category')
-    
-    # Category argument for single transactions
-    single_group.add_argument('--category', help="Transaction category (e.g., entertainment, grocery_pos)")
+    # Updated arguments matching new features
+    # idx, trans_date_trans_time, cc_num, merchant, category, amt, first, last, gender, street, city, state, zip, lat, long, city_pop, job, dob, trans_num, unix_time, merch_lat, merch_long, is_fraud
+    # 0, 2019-01-01 00:00:18, 2703186189652095, "fraud_Rippin,  Kub and Mann", misc_net, 4.97, Jennifer, Banks, F, 561 Perry Cove, Moravian Falls, NC, 28654, 36.0788, -81.1781, 3495, "Psychologist,  counselling", 1988-03-09, 0b242abb623afc578575680df30655b9, 1325376018, 36.011293, -82.048315, 0
 
-    # Prediction visualizations save path
+    parser.add_argument('--amount', type=float, required=True, help="Transaction Amount (float)")
+    parser.add_argument('--hour', type=int, required=True, help="Transction Time - Hour (HH)")
+    parser.add_argument('--day', type=int, required=True, help="Transction Time - Day (DD)")
+    parser.add_argument('--month', type=int, required=True, help="Transction Time - Month (MM)")
+    parser.add_argument('--state', required=True, help="State (int)")
+    parser.add_argument('--city-pop', type=int, required=True, help="City Population (int)")
+    parser.add_argument('--dob', required=True, help='Account Holder - Date of Birth (YYYY-MM-DD)')
+    parser.add_argument('--gender', choices=["M","F"], required=True, help="Account Holder - Gender")
+    parser.add_argument('--lat', type=float, required=True, help="Account Holder - Latitude (float)")
+    parser.add_argument('--long', type=float, required=True, help="Account Holder - Longitude (float)")
+    parser.add_argument('--merch-lat', type=float, required=True, help="Merchant - Latitude (float)")
+    parser.add_argument('--merch-long', type=float, required=True, help="Merchant - Longitude (float)")
+    parser.add_argument('--category',
+                        choices=["entertainment","food_dining","gas_transport","grocery_net","grocery_pos",
+                                 "health_fitness","home","kids_pets","misc_net","misc_pos","personal_care",
+                                 "shopping_net","shopping_pos","travel"],
+                        required=True, help="Merchant - Category")
+    
+    parser.add_argument(
+        '--model-path', 
+        default=os.getenv('MODEL_PATH', '../data/model/'),  # Fallback to ENV var MODEL_PATH or default value
+        help='Directory where datasets are stored (default: ../data/model/ or ENV var MODEL_PATH)'
+    )
+
+    # Visualizations save path
     parser.add_argument(
         '--prediction-visuals-path',
         default=os.getenv('PREDICTION_VISUALS_PATH', '../data/prediction_visuals/'),  # Fallback to ENV var PREDICTION_VISUALS_PATH or default value
-        help='Directory where datasets are stored (default: ../data/prediction_visuals/ or ENV var PREDICTION_VISUALS_PATH)'
+        help='Directory where prediction visuals are stored (default: ../data/prediction_visuals/ or ENV var PREDICTION_VISUALS_PATH)'
     )
 
-    # Required args
-    parser.add_argument(
-        '--model-path',
-        default=os.getenv('SAVE_MODEL', '../data/fraud_model.pkl'),  # Fallback to ENV var SAVE_MODEL or default value
-        help='Directory where datasets are stored (default: ../data/fraud_model.pkl or ENV var SAVE_MODEL)'
-    )
-
+    # Add DB/model path arguments from original script
     args = parser.parse_args()
-
-    # Validate input/output requirements
-    if (args.input_table or args.output_table) and not all([args.db_host, args.db_name, args.db_user, args.db_pass]):
-        parser.error("Database credentials required when using database input/output")
     
-    # Initialize database engine if needed
-    engine = None
-    if args.db_host:
-        engine = create_engine(f"postgresql+psycopg2://{args.db_user}:{args.db_pass}@{args.db_host}/{args.db_name}")
-
-    # Run prediction
-    predictor = FraudPredictionCLI(args.model_path, engine)
-    results = predictor.predict(args)
+    # Initialize the predictor and make predictions
+    predictor = FraudPredictionCLI(args.model_path)
+    result = predictor.predict_single(args)
     
-    if args.output_file:
-        results.to_csv(args.output_file, index=False)
-        print(f"Predictions saved to {args.output_file}")
-    elif args.output_table:
-        results.to_sql(args.output_table, engine, if_exists='replace', index=False)
-        print(f"Predictions saved to database table {args.output_table}")
-    else:
-        print("Fraud Probability Results:")
-        print(results.to_string(index=False))
-    
-    if args.output_file or args.output_table:
-        predictor.visualize_results(results, args.prediction_visuals_path)

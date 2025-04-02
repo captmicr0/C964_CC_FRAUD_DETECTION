@@ -170,6 +170,7 @@ class FraudDetector:
         self._plot_feature_importance(X_res, fn='balanced.feature_importance..png')
     
     def feature_engineering(self, df_train, df_test):
+        """Feature engineering input data to useable data"""
         # Initialize progress bar with a placeholder total
         pbar = tqdm(total=8, desc="Feature Engineering", unit="step")
         
@@ -322,8 +323,8 @@ class FraudDetector:
         pbar.update(1)
 
         # Save unbalanced model
-        model_path = os.path.join(path, 'model.pkl')
-        joblib.dump(self.model, model_path)
+        unbalanced_model_path = os.path.join(path, 'unbalanced_model.pkl')
+        joblib.dump(self.model, unbalanced_model_path)
         pbar.update(1)
 
         # Save balanced model
@@ -333,7 +334,7 @@ class FraudDetector:
 
         print(f"Label Encoder saved to {label_encoder_path}")
         print(f"Scaler saved to {scaler_path}")
-        print(f"Model saved to {model_path}")
+        print(f"Unbalanced Model saved to {unbalanced_model_path}")
         print(f"Balanced Model saved to {balanced_model_path}")
     
 if __name__ == "__main__":
