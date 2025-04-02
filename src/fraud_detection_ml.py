@@ -16,17 +16,23 @@ from imblearn.over_sampling import SMOTE
 import joblib
 
 class FraudDetector:
-    def __init__(self, db_user, db_pass, db_host, db_name):
+    def __init__(self, db_user, db_pass, db_host, db_name, eda_visuals_path):
         self.engine = create_engine(
             f"postgresql+psycopg2://{db_user}:{db_pass}@{db_host}/{db_name}"
         )
         self.model = None
         self.features = None
+        self.eda_visuals_path = eda_visuals_path
+
+        # Ensure the save path exists
+        os.makedirs(self.eda_visuals_path, exist_ok=True)
         
     def load_data(self, table_name):
         """Load and preprocess data from PostgreSQL"""
         query = f"SELECT * FROM {table_name}"
         df = pd.read_sql(query, self.engine)
+
+        self.visualize_missing_values(df)
         
         # Feature engineering
         df['trans_hour'] = df['trans_date_trans_time'].dt.hour
@@ -41,8 +47,38 @@ class FraudDetector:
         
         # Encode categoricals
         df = pd.get_dummies(df, columns=['category', 'gender', 'state'], drop_first=True)
+
+        self.visualize_is_fraud(df['is_fraud'])
         
         return df[self.features + [c for c in df.columns if c.startswith('category_')]], df['is_fraud']
+
+    def visualize_missing_values(self, df):
+        """Generate visualizations for EDA."""
+
+        missing_values = df.isnull().sum()
+
+        plt.figure(figsize=(10, 6))
+        missing_values.plot(kind='bar', color='skyblue')
+        plt.title('Missing Values per Column')
+        plt.xlabel('Column Name')
+        plt.ylabel('Number of Missing Values')
+        plt.xticks(rotation=45)
+        plt.tight_layout()
+        
+        plt.savefig(os.path.join(self.eda_visuals_path, 'missing_values_bar_graph.png'))
+
+    def visualize_is_fraud(self, y):
+        """Generate a bar graph showing the distribution of the target variable (is_fraud)."""
+
+        plt.figure(figsize=(8, 6))
+        y.value_counts().plot(kind='bar', color=['skyblue', 'orange'])
+        plt.title('Distribution of Target Variable (is_fraud)')
+        plt.xlabel('Fraud (1) vs Non-Fraud (0)')
+        plt.ylabel('Count')
+        plt.xticks(rotation=0)
+        plt.tight_layout()
+
+        plt.savefig(os.path.join(self.eda_visuals_path, 'is_fraud_distribution.png'))
 
     def train_model(self, test_size=0.2, table_name='fraud_train'):
         """Train and evaluate model with class balancing"""
@@ -150,6 +186,14 @@ if __name__ == "__main__":
         '--save-model', 
         default=os.getenv('SAVE_MODEL', '../data/fraud_model.pk1'),  # Fallback to ENV var SAVE_MODEL or default value
         help='Directory where datasets are stored (default: ../data/fraud_model.pkl or ENV var SAVE_MODEL)'
+    )
+    
+    # Visualizations save path
+    parser.add_argument(
+        '--eda-visuals-path',
+        required=True,
+        default=os.getenv('EDA_VISUALS_PATH', '../data/eda_visuals/'),  # Fallback to ENV var EDA_VISUALS_PATH or default value
+        help='Directory where datasets are stored (default: ../data/eda_visuals/ or ENV var EDA_VISUALS_PATH)'
     )
     
     args = parser.parse_args()
