@@ -5,7 +5,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 from tqdm import tqdm
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.calibration import LabelEncoder
@@ -37,23 +37,36 @@ class FraudDetector:
         
     def load_data(self, train_table, test_table):
         """Load and preprocess data from PostgreSQL"""
-        print("Loading training data...")
-        query = f"SELECT * FROM {train_table}"
+        def get_row_count(table_name):
+            """Get the row count of a table."""
+            query = text(f"SELECT COUNT(*) FROM {table_name}")
+            with self.engine.connect() as conn:
+                result = conn.execute(query)
+                return result.scalar()  # Fetch the scalar value (row count)
+        
+        # Get row counts for training and testing tables
+        train_row_count = get_row_count(train_table)
+        test_row_count = get_row_count(test_table)
+
+        # Load training data with progress bar
+        query = text(f"SELECT * FROM {train_table}")
         chunks = []
-        with tqdm(desc="Loading Train Data", unit="rows") as pbar:
+        # Visualize missing values and target variable distribution for training data
+        with tqdm(total=train_row_count, desc="Loading Train Data", unit="rows") as pbar:
             for chunk in pd.read_sql(query, self.engine, chunksize=1000):  # Load in chunks of 1000 rows
                 chunks.append(chunk)
                 pbar.update(len(chunk))
         df_train = pd.concat(chunks)
-                
+
+        # Visualize missing values and target variable distribution for training data
         self.visualize_missing_values(df_train)
         self.visualize_is_fraud(df_train['is_fraud'])
 
-        print("Loading testing data...")
-        query = f"SELECT * FROM {test_table}"
+        # Load testing data with progress bar
+        query = text(f"SELECT * FROM {test_table}")
         chunks = []
         
-        with tqdm(desc="Loading Test Data", unit="rows") as pbar:
+        with tqdm(total=test_row_count, desc="Loading Test Data", unit="rows") as pbar:
             for chunk in pd.read_sql(query, self.engine, chunksize=1000):  # Load in chunks of 1000 rows
                 chunks.append(chunk)
                 pbar.update(len(chunk))
@@ -101,13 +114,15 @@ class FraudDetector:
             max_depth=5
         )
 
-    def train_model(self, test_size=0.2, model_type='xgboost', train_table='fraud_train', test_table='fraud_test'):
+    def train_model(self, test_size=0.2, model_type='randomforest', train_table='fraud_train', test_table='fraud_test'):
         """Train and evaluate model with class balancing"""
         # Load data and select features
+        print("Loading training and testing data...")
         df_train, df_test = self.load_data(train_table, test_table)
         X_train, y_train, X_test, y_test = self.feature_engineering(df_train, df_test)
         
         # Model training
+        print("Training model...")
         self.model = self._init_model(model_type)
         self.model.fit(X_train, y_train)
 
@@ -125,9 +140,11 @@ class FraudDetector:
         self._plot_feature_importance(X_train)
 
         # Handle imbalance with SMOTE
+        print("Balancing training data...")
         smote = SMOTE(sampling_strategy="auto", random_state=42)
         X_res, y_res = smote.fit_resample(X_train, y_train)
 
+        print("Training balanced model...")
         self.model_smote = self._init_model(model_type)
         self.model_smote.fit(X_res, y_res)
 
@@ -144,6 +161,7 @@ class FraudDetector:
         self._plot_feature_importance(X_res, fn='SMOTE.feature_importance..png')
     
     def feature_engineering(self, df_train, df_test):
+        print("Feature engineering data...")
         # Drop columns that are not important
         # keep: trans_date_trans_time, cc_num,merchant, category, amt, gender, street, city, state, zip, lat, long, city_pop, job, dob, merch_lat, merch_long, is_fraud
         columns_to_drop = ['trans_num', 'unix_time', 'first', 'last']
@@ -304,9 +322,9 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         '--model-type',
-        choices=['xgboost', 'randomforsest'],
-        default=os.getenv('MODEL_TYPE', 'randomforsest'),  # Fallback to ENV var MODEL_PATH or default value
-        help='Model type (default: randomforsest or ENV var MODEL_TYPE)'
+        choices=['xgboost', 'randomforest'],
+        default=os.getenv('MODEL_TYPE', 'randomforest'),  # Fallback to ENV var MODEL_PATH or default value
+        help='Model type (default: randomforest or ENV var MODEL_TYPE)'
     )
     parser.add_argument(
         '--model-path', 
