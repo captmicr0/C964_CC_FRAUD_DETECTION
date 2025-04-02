@@ -104,9 +104,10 @@ python src/fraud_detection_ml.py --model-type randomforest --model-path /app/dat
   python src/predict_fraud.py --model-path /app/data/model --amount 843.91 --hour 23 --day 2 --month 1 --cc-bin 461331 --street "542 Steve Curve Suite 011" --city "Collettsville" --state NC --zip 28611 --city-pop 885 --dob 1988-09-15 --gender M --job "Soil scientist" --lat 35.9946 --long -81.7266 --merchant "Ruecker Group" --merch-lat 35.985612 --merch-long -81.383306 --category misc_net
   ```
 
-7. Stop all services when done:
+7. Stop all services and remove the containers when done:
 ```
-docker-compose down
+docker compose down
+docker compose rm
 ```
 
 ### Steps to Run Locally
