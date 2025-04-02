@@ -16,16 +16,20 @@ from imblearn.over_sampling import SMOTE
 import joblib
 
 class FraudDetector:
-    def __init__(self, db_user, db_pass, db_host, db_name, eda_visuals_path):
+    def __init__(self, db_user, db_pass, db_host, db_name, eda_visuals_path, model_visuals_path):
         self.engine = create_engine(
             f"postgresql+psycopg2://{db_user}:{db_pass}@{db_host}/{db_name}"
         )
+
         self.model = None
         self.features = None
-        self.eda_visuals_path = eda_visuals_path
 
-        # Ensure the save path exists
+        self.eda_visuals_path = eda_visuals_path
+        self.model_visuals_path = model_visuals_path
+
+        # Ensure the save paths exists
         os.makedirs(self.eda_visuals_path, exist_ok=True)
+        os.makedirs(self.eda_vimodel_visuals_pathuals_path, exist_ok=True)
         
     def load_data(self, table_name):
         """Load and preprocess data from PostgreSQL"""
@@ -64,8 +68,8 @@ class FraudDetector:
         plt.ylabel('Number of Missing Values')
         plt.xticks(rotation=45)
         plt.tight_layout()
-        
         plt.savefig(os.path.join(self.eda_visuals_path, 'missing_values_bar_graph.png'))
+        plt.close()
 
     def visualize_is_fraud(self, y):
         """Generate a bar graph showing the distribution of the target variable (is_fraud)."""
@@ -77,8 +81,8 @@ class FraudDetector:
         plt.ylabel('Count')
         plt.xticks(rotation=0)
         plt.tight_layout()
-
         plt.savefig(os.path.join(self.eda_visuals_path, 'is_fraud_distribution.png'))
+        plt.close()
 
     def train_model(self, test_size=0.2, table_name='fraud_train'):
         """Train and evaluate model with class balancing"""
@@ -122,7 +126,7 @@ class FraudDetector:
         plt.ylabel('True Positive Rate')
         plt.title('ROC Curve')
         plt.legend(loc="lower right")
-        plt.savefig('roc_curve.png')
+        plt.savefig(os.path.join(self.model_visuals_path, 'roc_curve.png'))
         plt.close()
 
     def _plot_confusion_matrix(self, y_true, y_pred):
@@ -133,7 +137,7 @@ class FraudDetector:
         plt.title('Confusion Matrix')
         plt.ylabel('True Label')
         plt.xlabel('Predicted Label')
-        plt.savefig('confusion_matrix.png')
+        plt.savefig(os.path.join(self.model_visuals_path, 'confusion_matrix.png'))
         plt.close()
 
     def _plot_feature_importance(self):
@@ -145,7 +149,7 @@ class FraudDetector:
         plt.barh(range(len(indices)), importances[indices], align='center')
         plt.yticks(range(len(indices)), [self.features[i] for i in indices])
         plt.tight_layout()
-        plt.savefig('feature_importance.png')
+        plt.savefig(os.path.join(self.model_visuals_path, 'feature_importance.png'))
         plt.close()
 
     def save_model(self, path):
@@ -195,10 +199,19 @@ if __name__ == "__main__":
         default=os.getenv('EDA_VISUALS_PATH', '../data/eda_visuals/'),  # Fallback to ENV var EDA_VISUALS_PATH or default value
         help='Directory where datasets are stored (default: ../data/eda_visuals/ or ENV var EDA_VISUALS_PATH)'
     )
+
+    # Visualizations save path
+    parser.add_argument(
+        '--model-visuals-path',
+        required=True,
+        default=os.getenv('MODEL_VISUALS_PATH', '../data/model_visuals/'),  # Fallback to ENV var MODEL_VISUALS_PATH or default value
+        help='Directory where datasets are stored (default: ../data/model_visuals/ or ENV var MODEL_VISUALS_PATH)'
+    )
     
     args = parser.parse_args()
     
     # Train and evaluate model
-    detector = FraudDetector(args.db_user, args.db_pass, args.db_host, args.db_name)
+    detector = FraudDetector(args.db_user, args.db_pass, args.db_host, args.db_name,
+                             args.eda_visuals_path, args.model_visuals_path)
     detector.train_model()
     detector.save_model(args.save_model)
