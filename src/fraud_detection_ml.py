@@ -161,57 +161,82 @@ class FraudDetector:
         self._plot_feature_importance(X_res, fn='SMOTE.feature_importance..png')
     
     def feature_engineering(self, df_train, df_test):
-        """Perform feature engineering with a dynamic progress bar."""
         # Initialize progress bar with a placeholder total
-        pbar = tqdm(total=10, desc="Feature Engineering", unit="step")
-
-        # Step 1: Drop columns
+        pbar = tqdm(total=8, desc="Feature Engineering", unit="step")
+        
+        # Drop columns that are not important
+        # keep: trans_date_trans_time, cc_num,merchant, category, amt, gender, street, city, state, zip, lat, long, city_pop, job, dob, merch_lat, merch_long, is_fraud
         columns_to_drop = ['trans_num', 'unix_time', 'first', 'last']
         df_train.drop(columns=columns_to_drop, axis=1, inplace=True, errors='ignore')
         df_test.drop(columns=columns_to_drop, axis=1, inplace=True, errors='ignore')
         pbar.update(1)
 
-        # Step 2: Split features and target
-        X_train = df_train.drop('is_fraud', axis=1)
-        y_train = df_train['is_fraud']
-        X_test = df_test.drop('is_fraud', axis=1)
-        y_test = df_test['is_fraud']
+        # Choose features and target for the training and test data
+        X_train = df_train.drop('is_fraud', axis=1)  # features
+        y_train = df_train['is_fraud']  # target variable
+        X_test = df_test.drop('is_fraud', axis=1)  # features
+        y_test = df_test['is_fraud']  # target
         pbar.update(1)
 
-        # Step 3: Identify column types
-        numerical_cols = X_train.select_dtypes(include=[float, int]).columns.tolist()
+        # Recognize numerical and categorical features in the training data
+        numerical_cols = X_train.select_dtypes(include=[np.number]).columns.tolist()
         categorical_cols = X_train.select_dtypes(include=['object']).columns.tolist()
+        pbar.update(1)
+
+        # Extract features from transaction date and time, then remove original column
+        X_train['trans_date_trans_time'] = pd.to_datetime(X_train['trans_date_trans_time'])
+        X_test['trans_date_trans_time'] = pd.to_datetime(X_test['trans_date_trans_time'])
+        
+        X_train['hour'] = X_train['trans_date_trans_time'].dt.hour
+        X_train['day'] = X_train['trans_date_trans_time'].dt.day
+        X_train['month'] = X_train['trans_date_trans_time'].dt.month
+
+        X_test['hour'] = X_test['trans_date_trans_time'].dt.hour
+        X_test['day'] = X_test['trans_date_trans_time'].dt.day
+        X_test['month'] = X_test['trans_date_trans_time'].dt.month
+        
+        X_train.drop('trans_date_trans_time', axis=1, inplace=True, errors='ignore')
+        X_test.drop('trans_date_trans_time', axis=1, inplace=True, errors='ignore')
+        pbar.update(1)
+
+        # Update after processing
+        categorical_cols = X_train.select_dtypes(include=['object']).columns.tolist()
+        numerical_cols = X_train.select_dtypes(include=[np.number]).columns.tolist()
         pbar.update(1)
 
         # Dynamically update total once categorical_cols length is known
         pbar.total += len(categorical_cols)  # Add the number of categorical columns to the total
         pbar.refresh()  # Refresh the progress bar to reflect the new total
 
-        # Step 4: Encode categorical features
+        # Convert categories into usable data
         label_encoder = LabelEncoder()
         for col in categorical_cols:
+            # avoid unseen labels
             combined = pd.concat([X_train[col], X_test[col]])
             label_encoder.fit(combined)
+
+            # transform data
             X_train[col] = label_encoder.transform(X_train[col])
             X_test[col] = label_encoder.transform(X_test[col])
-            pbar.update(1)  # Update for each iteration
 
-        # Step 5: Scale numerical features
+            pbar.update(1)
+        pbar.update(1)
+        
+        # Scale features
         scaler = StandardScaler()
         X_train[numerical_cols] = scaler.fit_transform(X_train[numerical_cols])
-        X_test[numerical_cols] = scaler.transform(X_test[numerical_cols])
+        X_test[numerical_cols] = scaler.transform(X_test[numerical_cols])  # for test data don't use fit_transform
         pbar.update(1)
 
-        # Step 6: Align columns
+        # Make sure both sets of data have matching columns
         X_train, X_test = X_train.align(X_test, join='inner', axis=1)
         pbar.update(1)
-
-        # Close the progress bar
         pbar.close()
 
-        print("\nFeature set of training and testing data:")
+        print("Feature set of training and testing data:")
         print(X_train.columns)
-        
+
+        # Return processed data
         return X_train, y_train, X_test, y_test
 
     def _plot_roc_curve(self, y_true, y_probs, fn='roc_curve.png'):
