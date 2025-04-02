@@ -3,3 +3,10 @@ sqlalchemy
 psycopg2-binary
 kaggle
 tqdm
+numpy
+matplotlib
+seaborn
+scikit-learn
+xgboost
+imblearn
+joblib
