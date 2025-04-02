@@ -135,7 +135,7 @@ class FraudDetector:
 
         # Evaluate and create visualizations
         print("Model Evaluation:")
-        print(classification_report(y_test, prediction))
+        print(classification_report(y_test, prediction), end="")
         print(f"AUC-ROC Score: {roc_auc_score(y_test, prediction):.2f}")
         print(f"Accuracy: {accuracy_score(y_test, prediction):.2f}")
 
@@ -158,7 +158,7 @@ class FraudDetector:
 
         # Re-evaluate and create visualizations
         print("Balanced Model Evaluation (SMOTE):")
-        print(classification_report(y_test, prediction_smote))
+        print(classification_report(y_test, prediction_smote), end="")
         print(f"AUC-ROC Score: {roc_auc_score(y_test, prediction_smote):.2f}")
         print(f"Accuracy: {accuracy_score(y_test, prediction_smote):.2f}")
 
