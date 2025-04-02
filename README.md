@@ -26,14 +26,16 @@ This project focuses on building a machine learning-based system to detect fraud
 - **Tools**: VSCode, pgAdmin, Docker, Docker Compose, Git
 
 ## Dataset
-The project uses the publicly available [Kaggle Credit Card Fraud Detection Dataset](https://www.kaggle.com/datasets/kartik2112/fraud-detection). The dataset will be downloaded automatically using the Kaggle API via the `kagglehub` Python module.
+The project uses the publicly available [Kaggle Credit Card Fraud Detection Dataset](https://www.kaggle.com/datasets/kartik2112/fraud-detection). The dataset will be downloaded automatically using the Kaggle API via the `kaggle` Python module.
 
 ## Project Structure
 ```
-├── data/                # Contains dataset files (not included in the repo)
+├── data/                # Contains dataset files (not included in the repo) and kaggle.json (API key) 
+│   ├── eda_visuals/     # Contains EDA visuals
+│   ├── model_visuals/   # Contains ML model and evaluation visuals
+│   └── model/           # Contains ML model artifacts
 ├── src/                 # Source code for preprocessing, modeling, and evaluation
 ├── docker/              # Docker-related files (e.g., Dockerfile, docker-compose.yml)
-├── results/             # Outputs such as plots, metrics, and reports
 ├── README.md            # Project documentation (this file)
 └── requirements.txt     # Python dependencies
 ```
