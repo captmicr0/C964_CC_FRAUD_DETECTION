@@ -76,14 +76,14 @@ docker compose exec fraud-detection-app bash
 
 4. Download and import the dataset into the PostgreSQL Database:
 ```
-python import_to_db.py --data-dir /app/data/
+python src/import_to_db.py --data-dir /app/data/
 ```
   - The application will automatically download the dataset using Kaggle API.
   - It will import the dataset into the PostgreSQL database.
 
 5. Train and evaluate the ML model:
 ```
-python fraud_detection_ml.py --model-type randomforest --model-path /app/data/model --eda-visuals-path /app/data/eda_visuals --model-visuals-path /app/data/model_visuals
+python src/fraud_detection_ml.py --model-type randomforest --model-path /app/data/model --eda-visuals-path /app/data/eda_visuals --model-visuals-path /app/data/model_visuals
 ```
   - It will being training the model(s) and evaluating them.
   - It will output EDA visualizations and model visualizations to the data directory
@@ -92,13 +92,13 @@ python fraud_detection_ml.py --model-type randomforest --model-path /app/data/mo
 6. Run some predictions:
   Examples:
   ```
-  python predict_fraud.py --amount 1077.69 --hour 22 --day 21 --month 6 --cc-bin 400567 --street "458 Phillips Island Apt. 768" --city "Denham Springs" --state LA --zip 70726 --city-pop 71335 --dob 1994-05-31 --gender M --job "Herbalist" --lat 30.459 --long -90.9027 --merchant "Heathcote, Yost and Kertzmann" --merch-lat 31.204974 --merch-long -90.261595 --category shopping_net
+  python src/predict_fraud.py --amount 1077.69 --hour 22 --day 21 --month 6 --cc-bin 400567 --street "458 Phillips Island Apt. 768" --city "Denham Springs" --state LA --zip 70726 --city-pop 71335 --dob 1994-05-31 --gender M --job "Herbalist" --lat 30.459 --long -90.9027 --merchant "Heathcote, Yost and Kertzmann" --merch-lat 31.204974 --merch-long -90.261595 --category shopping_net
   ```
   ```
-  python predict_fraud.py --amount 41.28 --hour 12 --day 21 --month 6 --cc-bin 359821 --street "9333 Valentine Point" --city "Bellmore" --state NY --zip 11710 --city-pop 34496 --dob 1970-10-21 --gender F --job "Librarian, public" --lat 40.6729 --long -73.5365 --merchant "Swaniawski, Nitzsche and Welch" --merch-lat 40.49581 --merch-long -74.196111 --category health_fitness
+  python src/predict_fraud.py --amount 41.28 --hour 12 --day 21 --month 6 --cc-bin 359821 --street "9333 Valentine Point" --city "Bellmore" --state NY --zip 11710 --city-pop 34496 --dob 1970-10-21 --gender F --job "Librarian, public" --lat 40.6729 --long -73.5365 --merchant "Swaniawski, Nitzsche and Welch" --merch-lat 40.49581 --merch-long -74.196111 --category health_fitness
   ```
   ```
-  python predict_fraud.py --amount 843.91 --hour 23 --day 2 --month 1 --cc-bin 461331 --street "542 Steve Curve Suite 011" --city "Collettsville" --state NC --zip 28611 --city-pop 885 --dob 1988-09-15 --gender M --job "Soil scientist" --lat 35.9946 --long -81.7266 --merchant "Ruecker Group" --merch-lat 35.985612 --merch-long -81.383306 --category misc_net
+  python src/predict_fraud.py --amount 843.91 --hour 23 --day 2 --month 1 --cc-bin 461331 --street "542 Steve Curve Suite 011" --city "Collettsville" --state NC --zip 28611 --city-pop 885 --dob 1988-09-15 --gender M --job "Soil scientist" --lat 35.9946 --long -81.7266 --merchant "Ruecker Group" --merch-lat 35.985612 --merch-long -81.383306 --category misc_net
   ```
 
 7. Stop all services when done:
