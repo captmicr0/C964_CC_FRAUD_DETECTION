@@ -24,7 +24,7 @@ from imblearn.over_sampling import SMOTE
 import joblib
 
 # Log file directory from ENV
-log_dir = os.environ.get("LOG_DIR", os.getcwd())
+log_dir = os.environ.get("LOG_DIR", os.path.join(os.getcwd(), "../logs"))
 
 # Ensure the log directory exists
 if not os.path.exists(log_dir):
