@@ -1,7 +1,6 @@
 import os
 import argparse
 import pandas as pd
-from sklearn.discriminant_analysis import StandardScaler
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
@@ -9,6 +8,7 @@ from sqlalchemy import create_engine
 from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.calibration import LabelEncoder
+from sklearn.discriminant_analysis import StandardScaler
 from xgboost import XGBClassifier
 from sklearn.metrics import (classification_report, 
                             roc_curve, 
