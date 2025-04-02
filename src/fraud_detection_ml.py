@@ -117,20 +117,24 @@ class FraudDetector:
     def train_model(self, test_size=0.2, model_type='randomforest', train_table='fraud_train', test_table='fraud_test'):
         """Train and evaluate model with class balancing"""
         # Load data and select features
-        print("Loading training and testing data...")
+        print()
         df_train, df_test = self.load_data(train_table, test_table)
+
+        print()
         X_train, y_train, X_test, y_test = self.feature_engineering(df_train, df_test)
         
         # Model training
+        print()
         print("Training model...")
         self.model = self._init_model(model_type)
         self.model.fit(X_train, y_train)
 
         # Predict test data
+        print("Predicting on test data...")
         prediction = self.model.predict(X_test)
 
         # Evaluate and create visualizations
-        print("\nModel Evaluation:")
+        print("Model Evaluation:")
         print(classification_report(y_test, prediction))
         print(f"AUC-ROC Score: {roc_auc_score(y_test, prediction):.2f}")
         print(f"Accuracy: {accuracy_score(y_test, prediction):.2f}")
@@ -140,6 +144,7 @@ class FraudDetector:
         self._plot_feature_importance(X_train)
 
         # Handle imbalance with SMOTE
+        print()
         print("Balancing training data...")
         smote = SMOTE(sampling_strategy="auto", random_state=42)
         X_res, y_res = smote.fit_resample(X_train, y_train)
@@ -148,10 +153,11 @@ class FraudDetector:
         self.model_smote = self._init_model(model_type)
         self.model_smote.fit(X_res, y_res)
 
+        print("Predicting on test data...")
         prediction_smote = self.model_smote.predict(X_test)
 
         # Re-evaluate and create visualizations
-        print("\nBalanced Model Evaluation (SMOTE):")
+        print("Balanced Model Evaluation (SMOTE):")
         print(classification_report(y_test, prediction_smote))
         print(f"AUC-ROC Score: {roc_auc_score(y_test, prediction_smote):.2f}")
         print(f"Accuracy: {accuracy_score(y_test, prediction_smote):.2f}")
@@ -296,6 +302,7 @@ class FraudDetector:
 
     def save_model(self, path):
         """Save trained models"""
+        print("Saving models...")
         # Ensure the save path exists
         os.makedirs(path, exist_ok=True)
 
@@ -305,7 +312,7 @@ class FraudDetector:
 
         smote_model_path = os.path.join(path, 'smote_model.pkl')
         joblib.dump(self.model, smote_model_path)
-        print(f"SMOTE Model saved to {smote_model_path}")
+        print(f"Balanced model saved to {smote_model_path}")
     
 if __name__ == "__main__":
     # Parse command-line arguments
@@ -368,4 +375,5 @@ if __name__ == "__main__":
     detector = FraudDetector(args.db_user, args.db_pass, args.db_host, args.db_name,
                              args.eda_visuals_path, args.model_visuals_path)
     detector.train_model(model_type=args.model_type)
+    print()
     detector.save_model(args.model_path)
