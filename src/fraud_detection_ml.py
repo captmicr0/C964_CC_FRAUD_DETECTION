@@ -29,7 +29,7 @@ class FraudDetector:
 
         # Ensure the save paths exists
         os.makedirs(self.eda_visuals_path, exist_ok=True)
-        os.makedirs(self.eda_vimodel_visuals_pathuals_path, exist_ok=True)
+        os.makedirs(self.model_visuals_path, exist_ok=True)
         
     def load_data(self, table_name):
         """Load and preprocess data from PostgreSQL"""
@@ -89,7 +89,8 @@ class FraudDetector:
         X, y = self.load_data(table_name)
         
         # Handle imbalance
-        smote = SMOTE(sampling_strategy=0.1, random_state=42)
+        #smote = SMOTE(sampling_strategy=0.1, random_state=42)
+        smote = SMOTE(random_state=42)
         X_res, y_res = smote.fit_resample(X, y)
         
         # Split data
@@ -142,15 +143,20 @@ class FraudDetector:
 
     def _plot_feature_importance(self):
         """Generate feature importance visualization"""
+        feature_names = self.features
         importances = self.model.feature_importances_
-        indices = np.argsort(importances)[-10:]
+
+        sorted_indices = np.argsort(importances)[-10:]
+
         plt.figure(figsize=(10,6))
         plt.title('Top 10 Important Features')
-        plt.barh(range(len(indices)), importances[indices], align='center')
-        plt.yticks(range(len(indices)), [self.features[i] for i in indices])
+        plt.barh(range(len(sorted_indices)), importances[sorted_indices], align='center')
+        plt.yticks(range(len(sorted_indices)), [feature_names[i] for i in sorted_indices])
         plt.tight_layout()
         plt.savefig(os.path.join(self.model_visuals_path, 'feature_importance.png'))
         plt.close()
+    
+
 
     def save_model(self, path):
         """Save trained model"""
@@ -188,7 +194,7 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         '--save-model', 
-        default=os.getenv('SAVE_MODEL', '../data/fraud_model.pk1'),  # Fallback to ENV var SAVE_MODEL or default value
+        default=os.getenv('SAVE_MODEL', '../data/fraud_model.pkl'),  # Fallback to ENV var SAVE_MODEL or default value
         help='Directory where datasets are stored (default: ../data/fraud_model.pkl or ENV var SAVE_MODEL)'
     )
     

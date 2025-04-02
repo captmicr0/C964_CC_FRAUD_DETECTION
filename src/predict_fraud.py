@@ -249,7 +249,7 @@ if __name__ == "__main__":
     parser.add_argument(
         '--model-path',
         required=True,
-        default=os.getenv('SAVE_MODEL', '../data/fraud_model.pk1'),  # Fallback to ENV var SAVE_MODEL or default value
+        default=os.getenv('SAVE_MODEL', '../data/fraud_model.pkl'),  # Fallback to ENV var SAVE_MODEL or default value
         help='Directory where datasets are stored (default: ../data/fraud_model.pkl or ENV var SAVE_MODEL)'
     )
 
