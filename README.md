@@ -58,33 +58,41 @@ Ensure you have the following installed on your system:
      - bind-mount `kaggle.json` to `~/.kaggle/kaggle.json` using `-v kaggle.json:~/.kaggle/kaggle.json`
 
 ### Steps to Run via Docker Compose (easiest option)
-1. Build and start all services (application and PostgreSQL) using `docker-compose`:
+1. Clone this repository:
+```
+git clone https://github.com/captmicr0/C964_CC_FRAUD_DETECTION.git
+cd C964_CC_FRAUD_DETECTION
+cd docker
+```
+
+2. Build and start all services (application and PostgreSQL) using `docker-compose`:
 ```
 docker-compose up --build
 ```
 
-2. Once all services are running:
+3. Once all services are running:
 - The application container will automatically download the dataset using Kaggle API.
 - It will import the dataset into the PostgreSQL database.
+- It will being training the model(s) and verifying them.
+- It will output EDA and model visualizations to the data directory
+- It will save the model artifacts in the data directory for later use (see below)
 
-3. To train the model or make predictions:
+4. To make predictions:
 - Open a terminal session in the application container:
   ```
   docker exec -it fraud-detection-app bash
   ```
-- Run training:
-  ```
-  python src/main.py --db-host fraud-detection-db --db-name fraud_detection --db-user postgres --db-pass password --mode train
-  ```
 - Run predictions:
-  - Database table as input
-    ```
-    python src/main.py --db-host localhost --db-name fraud_detection --db-user postgres --db-pass password --mode predict --input-table fraud_test
-    ```
-  - CSV file as input
-    ```
-    python src/main.py --db-host localhost --db-name fraud_detection --db-user postgres --db-pass password --mode predict --input-file ../data/fraudTest.csv
-    ```
+  Examples:
+  ```
+  python predict_fraud.py --amount 1077.69 --hour 22 --day 21 --month 6 --cc-bin 400567 --street "458 Phillips Island Apt. 768" --city "Denham Springs" --state LA --zip 70726 --city-pop 71335 --dob 1994-05-31 --gender M --job "Herbalist" --lat 30.459 --long -90.9027 --merchant "Heathcote, Yost and Kertzmann" --merch-lat 31.204974 --merch-long -90.261595 --category shopping_net
+  ```
+  ```
+  python predict_fraud.py --amount 41.28 --hour 12 --day 21 --month 6 --cc-bin 359821 --street "9333 Valentine Point" --city "Bellmore" --state NY --zip 11710 --city-pop 34496 --dob 1970-10-21 --gender F --job "Librarian, public" --lat 40.6729 --long -73.5365 --merchant "Swaniawski, Nitzsche and Welch" --merch-lat 40.49581 --merch-long -74.196111 --category health_fitness
+  ```
+  ```
+  python predict_fraud.py --amount 843.91 --hour 23 --day 2 --month 1 --cc-bin 461331 --street "542 Steve Curve Suite 011" --city "Collettsville" --state NC --zip 28611 --city-pop 885 --dob 1988-09-15 --gender M --job "Soil scientist" --lat 35.9946 --long -81.7266 --merchant "Ruecker Group" --merch-lat 35.985612 --merch-long -81.383306 --category misc_net
+  ```
 
 4. Stop all services when done:
 ```
@@ -108,24 +116,31 @@ pip install -r requirements.txt
 docker run --name fraud-db -e POSTGRES_USER=postgres -e POSTGRES_PASSWORD=password -e POSTGRES_DB=fraud_detection -p 5432:5432 -d postgres
 ```
 
-4. Run the main script for training or predictions:
+4. Go to the src subdirectory in the terminal
+  ```
+  cd src
+  ```
+
+5. Run the scripts for training:
 - For Importing Training Data:
   ```
   python src/import_to_db.py --db-host localhost --db-name fraud_detection --db-user postgres --db-pass password
   ```
 - For Training:
   ```
-  python src/main.py --db-host localhost --db-name fraud_detection --db-user postgres --db-password password --mode train
+  python fraud_detection_ml.py --db-host localhost --db-name fraud_detection --db-user postgres --db-pass password --model-type randomforest
   ```
 - For Predictions:
-  - Database table as input
-    ```
-    python src/main.py --db-host localhost --db-name fraud_detection --db-user postgres --db-password password --mode predict --input-table fraud_test
-    ```
-  - CSV file as input
-    ```
-    python src/main.py --db-host localhost --db-name fraud_detection --db-user postgres --db-password password --mode predict --input-file ../data/fraudTest.csv
-    ```
+  Examples:
+  ```
+  python predict_fraud.py --amount 1077.69 --hour 22 --day 21 --month 6 --cc-bin 400567 --street "458 Phillips Island Apt. 768" --city "Denham Springs" --state LA --zip 70726 --city-pop 71335 --dob 1994-05-31 --gender M --job "Herbalist" --lat 30.459 --long -90.9027 --merchant "Heathcote, Yost and Kertzmann" --merch-lat 31.204974 --merch-long -90.261595 --category shopping_net
+  ```
+  ```
+  python predict_fraud.py --amount 41.28 --hour 12 --day 21 --month 6 --cc-bin 359821 --street "9333 Valentine Point" --city "Bellmore" --state NY --zip 11710 --city-pop 34496 --dob 1970-10-21 --gender F --job "Librarian, public" --lat 40.6729 --long -73.5365 --merchant "Swaniawski, Nitzsche and Welch" --merch-lat 40.49581 --merch-long -74.196111 --category health_fitness
+  ```
+  ```
+  python predict_fraud.py --amount 843.91 --hour 23 --day 2 --month 1 --cc-bin 461331 --street "542 Steve Curve Suite 011" --city "Collettsville" --state NC --zip 28611 --city-pop 885 --dob 1988-09-15 --gender M --job "Soil scientist" --lat 35.9946 --long -81.7266 --merchant "Ruecker Group" --merch-lat 35.985612 --merch-long -81.383306 --category misc_net
+  ```
 
 ## Future Enhancements
 - Explore additional algorithms for improved performance.
