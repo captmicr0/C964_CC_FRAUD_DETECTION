@@ -180,7 +180,7 @@ class FraudDetector:
         logger.info(f"AUC-ROC Score: {roc_auc_score(y_test, prediction):.2f}")
         logger.info(f"Accuracy: {accuracy_score(y_test, prediction):.2f}")
 
-        self._plot_roc_curve(y_test, self.model.predict_proba(X_test)[:,1], fn='unbalanced.roc_curve.png')
+        self._plot_roc_curve(y_test, self.model.predict_proba(X_test)[:,1], model_type=model_type, fn='unbalanced.roc_curve.png')
         self._plot_confusion_matrix(y_test, prediction, fn='unbalanced.confusion_matrix.png')
         self._plot_feature_importance(X_train, fn='unbalanced.feature_importance.png')
 
@@ -204,7 +204,7 @@ class FraudDetector:
         logger.info(f"AUC-ROC Score: {roc_auc_score(y_test, prediction_smote):.2f}")
         logger.info(f"Accuracy: {accuracy_score(y_test, prediction_smote):.2f}")
 
-        self._plot_roc_curve(y_test, self.model_smote.predict_proba(X_test)[:,1], fn='balanced.roc_curve.png')
+        self._plot_roc_curve(y_test, self.model_smote.predict_proba(X_test)[:,1], model_type=model_type, fn='balanced.roc_curve.png')
         self._plot_confusion_matrix(y_test, prediction_smote, fn='balanced.confusion_matrix.png')
         self._plot_feature_importance(X_res, fn='balanced.feature_importance.png')
     
@@ -294,11 +294,12 @@ class FraudDetector:
         # Return processed data
         return X_train, y_train, X_test, y_test
 
-    def _plot_roc_curve(self, y_true, y_probs, fn='roc_curve.png'):
+    def _plot_roc_curve(self, y_true, y_probs, model_type, fn='roc_curve.png'):
         """Generate ROC curve visualization"""
         fpr, tpr, _ = roc_curve(y_true, y_probs)
         plt.figure()
-        plt.plot(fpr, tpr, label='XGBoost (AUC = %0.2f)' % roc_auc_score(y_true, y_probs))
+        model_type_to_str = {'xgboost': 'XGBoost', 'randomforest': 'Random Forest'}
+        plt.plot(fpr, tpr, label=f'{model_type_to_str[model_type]} (AUC = {roc_auc_score(y_true, y_probs):0.2f})')
         plt.plot([0, 1], [0, 1], 'k--')
         plt.xlabel('False Positive Rate')
         plt.ylabel('True Positive Rate')
