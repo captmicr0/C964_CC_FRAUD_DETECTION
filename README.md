@@ -60,40 +60,39 @@ Ensure you have the following installed on your system:
 
 ### Steps to Run via Docker Compose (easiest option)
 1. Clone this repository:
-```
-git clone https://github.com/captmicr0/C964_CC_FRAUD_DETECTION.git
-cd C964_CC_FRAUD_DETECTION
-cd docker
-```
+  ```
+  git clone https://github.com/captmicr0/C964_CC_FRAUD_DETECTION.git
+  cd C964_CC_FRAUD_DETECTION
+  cd docker
+  ```
 
 2. Build and start all services (application and PostgreSQL) using `docker compose`:
-```
-docker compose build
-docker compose up -d
-```
+  ```
+  docker compose build
+  docker compose up -d
+  ```
 
 3. Attach the the fraud-detection-app service to get an interactive terminal:
-```
-docker compose exec fraud-detection-app bash
-```
+  ```
+  docker compose exec fraud-detection-app bash
+  ```
 
 4. Download and import the dataset into the PostgreSQL Database:
-```
-python src/import_to_db.py --data-dir /app/data/
-```
+  ```
+  python src/import_to_db.py --data-dir /app/data/
+  ```
   - The application will automatically download the dataset using Kaggle API.
   - It will import the dataset into the PostgreSQL database.
 
 5. Train and evaluate the ML model:
-```
-python src/fraud_detection_ml.py --model-type randomforest --model-path /app/data/model --eda-visuals-path /app/data/eda_visuals --model-visuals-path /app/data/model_visuals
-```
+  ```
+  python src/fraud_detection_ml.py --model-type randomforest --model-path /app/data/model --eda-visuals-path /app/data/eda_visuals --model-visuals-path /app/data/model_visuals
+  ```
   - It will being training the model(s) and evaluating them.
   - It will output EDA visualizations and model visualizations to the data directory
   - It will save the model artifacts in the data directory for later use (see below)
 
 6. Run some predictions:
-  Examples:
   ```
   python src/predict_fraud.py --model-path /app/data/model --amount 1077.69 --hour 22 --day 21 --month 6 --cc-bin 400567 --street "458 Phillips Island Apt. 768" --city "Denham Springs" --state LA --zip 70726 --city-pop 71335 --dob 1994-05-31 --gender M --job "Herbalist" --lat 30.459 --long -90.9027 --merchant "Heathcote, Yost and Kertzmann" --merch-lat 31.204974 --merch-long -90.261595 --category shopping_net
   ```
@@ -105,44 +104,44 @@ python src/fraud_detection_ml.py --model-type randomforest --model-path /app/dat
   ```
 
 7. Stop all services and remove the containers when done:
-```
-docker compose down
-docker compose rm
-```
+  ```
+  docker compose down
+  docker compose rm
+  ```
 
 ### Steps to Run Locally
 1. Clone this repository:
-```
-git clone https://github.com/captmicr0/C964_CC_FRAUD_DETECTION.git
-cd C964_CC_FRAUD_DETECTION
-```
+  ```
+  git clone https://github.com/captmicr0/C964_CC_FRAUD_DETECTION.git
+  cd C964_CC_FRAUD_DETECTION
+  ```
 
 2. Install dependencies:
-```
-pip install -r requirements.txt
-```
+  ```
+  pip install -r requirements.txt
+  ```
 
 3. Start a PostgreSQL instance locally or via Docker:
-```
-docker run --name fraud-db -e POSTGRES_USER=postgres -e POSTGRES_PASSWORD=password -e POSTGRES_DB=fraud_detection -p 5432:5432 -d postgres
-```
+  ```
+  docker run --name fraud-db -e POSTGRES_USER=postgres -e POSTGRES_PASSWORD=password -e POSTGRES_DB=fraud_detection -p 5432:5432 -d postgres
+  ```
 
 4. Go to the src subdirectory in the terminal
   ```
   cd src
   ```
 
-5. Run the scripts for training:
-- For Importing Training Data:
+5. Download and import the dataset into the PostgreSQL Database:
   ```
   python import_to_db.py --db-host localhost --db-name fraud_detection --db-user postgres --db-pass password
   ```
-- For Training:
+
+6. Train and evaluate the ML model:
   ```
   python fraud_detection_ml.py --db-host localhost --db-name fraud_detection --db-user postgres --db-pass password --model-type randomforest
   ```
-- For Predictions:
-  Examples:
+
+7. Run some predictions:
   ```
   python predict_fraud.py --amount 1077.69 --hour 22 --day 21 --month 6 --cc-bin 400567 --street "458 Phillips Island Apt. 768" --city "Denham Springs" --state LA --zip 70726 --city-pop 71335 --dob 1994-05-31 --gender M --job "Herbalist" --lat 30.459 --long -90.9027 --merchant "Heathcote, Yost and Kertzmann" --merch-lat 31.204974 --merch-long -90.261595 --category shopping_net
   ```
