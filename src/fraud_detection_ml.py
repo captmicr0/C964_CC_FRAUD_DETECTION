@@ -1,11 +1,16 @@
+import logging
+from datetime import datetime
+#from tqdm import tqdm
+from tqdm_loggable.auto import tqdm
+
 import os
 import argparse
 import pandas as pd
+from sqlalchemy import create_engine, text
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 from tqdm import tqdm
-from sqlalchemy import create_engine, text
 from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.calibration import LabelEncoder
@@ -18,6 +23,43 @@ from sklearn.metrics import (classification_report,
                             accuracy_score)
 from imblearn.over_sampling import SMOTE
 import joblib
+
+# Log file directory from ENV
+log_dir = os.environ.get("LOG_DIR", os.getcwd())
+
+# Ensure the log directory exists
+if not os.path.exists(log_dir):
+    os.makedirs(log_dir)
+
+# Get the current date and time when the program starts
+start_time = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+
+# Configure logging with a dynamic filename
+log_filename = f"FraudDetector_{start_time}.log"
+
+# Construct the full log file path
+log_path = os.path.join(log_dir, log_filename)
+
+# Create a logger
+logger = logging.getLogger("FraudDetector")
+logger.setLevel(logging.DEBUG)  # Set the level to DEBUG to capture all messages
+
+# Create a formatter
+formatter = logging.Formatter("%(asctime)s - %(name)s - %(message)s", datefmt="%H:%M:%S")
+
+# Create a file handler
+file_handler = logging.FileHandler(log_path)
+file_handler.setLevel(logging.DEBUG)  # Log all levels to the file
+file_handler.setFormatter(formatter)
+
+# Create a stream handler for console output
+console_handler = logging.StreamHandler()
+console_handler.setLevel(logging.DEBUG)  # Log all levels to the console
+console_handler.setFormatter(formatter)
+
+# Add handlers to the logger
+logger.addHandler(file_handler)
+logger.addHandler(console_handler)
 
 class FraudDetector:
     def __init__(self, db_user, db_pass, db_host, db_name, eda_visuals_path, model_visuals_path):
@@ -120,52 +162,48 @@ class FraudDetector:
     def train_model(self, test_size=0.2, model_type='randomforest', train_table='fraud_train', test_table='fraud_test'):
         """Train and evaluate model with class balancing"""
         # Load data and select features
-        print()
         df_train, df_test = self.load_data(train_table, test_table)
 
-        print()
         X_train, y_train, X_test, y_test = self.feature_engineering(df_train, df_test)
         
         # Model training
-        print()
-        print("Training unbalanced model...")
+        logger.info("Training unbalanced model...")
         self.model = self._init_model(model_type)
         self.model.fit(X_train, y_train)
 
         # Predict test data
-        print("Predicting on test data...")
+        logger.info("Predicting on test data...")
         prediction = self.model.predict(X_test)
 
         # Evaluate and create visualizations
-        print("Model Evaluation:")
-        print(classification_report(y_test, prediction), end="")
-        print(f"AUC-ROC Score: {roc_auc_score(y_test, prediction):.2f}")
-        print(f"Accuracy: {accuracy_score(y_test, prediction):.2f}")
+        logger.info("Model Evaluation:")
+        logger.info(classification_report(y_test, prediction), end="")
+        logger.info(f"AUC-ROC Score: {roc_auc_score(y_test, prediction):.2f}")
+        logger.info(f"Accuracy: {accuracy_score(y_test, prediction):.2f}")
 
         self._plot_roc_curve(y_test, self.model.predict_proba(X_test)[:,1], fn='unbalanced.roc_curve.png')
         self._plot_confusion_matrix(y_test, prediction, fn='unbalanced.confusion_matrix.png')
         self._plot_feature_importance(X_train, fn='unbalanced.feature_importance.png')
 
         # Handle imbalance with SMOTE
-        print()
-        print("Balancing training data...")
+        logger.info("Balancing training data...")
         smote = SMOTE(sampling_strategy="auto", random_state=42)
         X_res, y_res = smote.fit_resample(X_train, y_train)
 
         # Model training
-        print("Training balanced model...")
+        logger.info("Training balanced model...")
         self.model_smote = self._init_model(model_type)
         self.model_smote.fit(X_res, y_res)
 
         # Predict test data
-        print("Predicting on test data...")
+        logger.info("Predicting on test data...")
         prediction_smote = self.model_smote.predict(X_test)
 
         # Evaluate and create visualizations
-        print("Balanced Model Evaluation (SMOTE):")
-        print(classification_report(y_test, prediction_smote), end="")
-        print(f"AUC-ROC Score: {roc_auc_score(y_test, prediction_smote):.2f}")
-        print(f"Accuracy: {accuracy_score(y_test, prediction_smote):.2f}")
+        logger.info("Balanced Model Evaluation (SMOTE):")
+        logger.info(classification_report(y_test, prediction_smote), end="")
+        logger.info(f"AUC-ROC Score: {roc_auc_score(y_test, prediction_smote):.2f}")
+        logger.info(f"Accuracy: {accuracy_score(y_test, prediction_smote):.2f}")
 
         self._plot_roc_curve(y_test, self.model_smote.predict_proba(X_test)[:,1], fn='balanced.roc_curve.png')
         self._plot_confusion_matrix(y_test, prediction_smote, fn='balanced.confusion_matrix.png')
@@ -251,8 +289,8 @@ class FraudDetector:
         pbar.update(1)
         pbar.close()
 
-        print("Feature set of training and testing data:")
-        print(X_train.columns)
+        logger.info("Feature set of training and testing data:")
+        logger.info(X_train.columns)
 
         # Return processed data
         return X_train, y_train, X_test, y_test
@@ -341,10 +379,10 @@ class FraudDetector:
         pbar.update(1)
         pbar.close()
 
-        print(f"Label Encoder saved to {label_encoder_path}")
-        print(f"Scaler saved to {scaler_path}")
-        print(f"Unbalanced Model saved to {unbalanced_model_path}")
-        print(f"Balanced Model saved to {balanced_model_path}")
+        logger.info(f"Label Encoder saved to {label_encoder_path}")
+        logger.info(f"Scaler saved to {scaler_path}")
+        logger.info(f"Unbalanced Model saved to {unbalanced_model_path}")
+        logger.info(f"Balanced Model saved to {balanced_model_path}")
     
 if __name__ == "__main__":
     # Parse command-line arguments
@@ -407,5 +445,4 @@ if __name__ == "__main__":
     detector = FraudDetector(args.db_user, args.db_pass, args.db_host, args.db_name,
                              args.eda_visuals_path, args.model_visuals_path)
     detector.train_model(model_type=args.model_type)
-    print()
     detector.save_artifacts(args.model_path)

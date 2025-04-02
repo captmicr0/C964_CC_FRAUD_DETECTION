@@ -3,6 +3,7 @@ sqlalchemy
 psycopg2-binary
 kaggle
 tqdm
+tqdm-loggable
 numpy
 matplotlib
 seaborn

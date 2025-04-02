@@ -24,7 +24,7 @@ services:
       DB_HOST: fraud-detection-db
       DB_NAME: fraud_detection
       DB_USER: postgres
-      DB_PASSWORD: password
+      DB_PASS: password
     volumes:
       - ../data/kaggle.json:/root/.kaggle/kaggle.json
       - ../data:/app/data  # Mount the data directory for dataset access if needed

@@ -1,14 +1,55 @@
-import argparse
+import logging
+from datetime import datetime
+#from tqdm import tqdm
+from tqdm_loggable.auto import tqdm
+
 import os
+import argparse
 import pandas as pd
+from sqlalchemy import create_engine
 import joblib
 import numpy as np
 from tqdm import tqdm
-from sqlalchemy import create_engine
 from sklearn.preprocessing import LabelEncoder, StandardScaler
 import matplotlib.pyplot as plt
 import seaborn as sns
-from datetime import datetime
+
+# Log file directory from ENV
+log_dir = os.environ.get("LOG_DIR", os.getcwd())
+
+# Ensure the log directory exists
+if not os.path.exists(log_dir):
+    os.makedirs(log_dir)
+
+# Get the current date and time when the program starts
+start_time = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+
+# Configure logging with a dynamic filename
+log_filename = f"FraudPredictionCLI_{start_time}.log"
+
+# Construct the full log file path
+log_path = os.path.join(log_dir, log_filename)
+
+# Create a logger
+logger = logging.getLogger("FraudPredictionCLI")
+logger.setLevel(logging.DEBUG)  # Set the level to DEBUG to capture all messages
+
+# Create a formatter
+formatter = logging.Formatter("%(asctime)s - %(name)s - %(message)s", datefmt="%H:%M:%S")
+
+# Create a file handler
+file_handler = logging.FileHandler(log_path)
+file_handler.setLevel(logging.DEBUG)  # Log all levels to the file
+file_handler.setFormatter(formatter)
+
+# Create a stream handler for console output
+console_handler = logging.StreamHandler()
+console_handler.setLevel(logging.DEBUG)  # Log all levels to the console
+console_handler.setFormatter(formatter)
+
+# Add handlers to the logger
+logger.addHandler(file_handler)
+logger.addHandler(console_handler)
 
 class FraudPredictionCLI:
     def __init__(self, model_path):
@@ -93,8 +134,8 @@ class FraudPredictionCLI:
         pbar.update(1)
         pbar.close()
 
-        print("Feature set of testing data:")
-        print(X_test.columns)
+        logger.info("Feature set of testing data:")
+        logger.info(X_test.columns)
 
         # Return processed data
         if 'is_fraud' in X_test.columns:
@@ -131,20 +172,20 @@ class FraudPredictionCLI:
         X_test, y_test = self.feature_engineering(single_df)
         
         # Make a prediction using the unbalanced model
-        print("Prediction based on unbalanced model:")
+        logger.info("Prediction based on unbalanced model:")
         prediction = self.model.predict(X_test)
         probabilities = self.model.predict_proba(X_test)[:, 1]  # Probability of fraud
         
-        print(f"\tPrediction: {'Fraudulent' if int(prediction[0]) == 1 else 'Non-Fraudulent'}")
-        print(f"\tProbability of Fraud: {probabilities[0]:.2f}")
+        logger.info(f"\tPrediction: {'Fraudulent' if int(prediction[0]) == 1 else 'Non-Fraudulent'}")
+        logger.info(f"\tProbability of Fraud: {probabilities[0]:.2f}")
 
         # Make a prediction using the balanced model
-        print("Prediction based on balanced model:")
+        logger.info("Prediction based on balanced model:")
         prediction = self.model_smote.predict(X_test)
         probabilities = self.model_smote.predict_proba(X_test)[:, 1]  # Probability of fraud
         
-        print(f"\tPrediction: {'Fraudulent' if int(prediction[0]) == 1 else 'Non-Fraudulent'}")
-        print(f"\tProbability of Fraud: {probabilities[0]:.2f}")
+        logger.info(f"\tPrediction: {'Fraudulent' if int(prediction[0]) == 1 else 'Non-Fraudulent'}")
+        logger.info(f"\tProbability of Fraud: {probabilities[0]:.2f}")
     
     @staticmethod
     def visualize_data(df, prediction_visuals_path):
