@@ -41,7 +41,7 @@ class FraudDetector:
         # Feature engineering
         df['trans_hour'] = df['trans_date_trans_time'].dt.hour
         df['trans_day'] = df['trans_date_trans_time'].dt.dayofweek
-        df['age'] = (pd.to_datetime('today') - df['dob']).dt.days // 365
+        df['age'] = (pd.to_datetime('today') - pd.to_datetime(df['dob'])).dt.days // 365
         
         # Select features
         self.features = [
