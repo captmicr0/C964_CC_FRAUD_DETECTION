@@ -31,30 +31,17 @@ class FraudDetector:
         os.makedirs(self.eda_visuals_path, exist_ok=True)
         os.makedirs(self.model_visuals_path, exist_ok=True)
         
-    def load_data(self, table_name):
+    def load_data(self, train_table, test_table):
         """Load and preprocess data from PostgreSQL"""
-        query = f"SELECT * FROM {table_name}"
-        df = pd.read_sql(query, self.engine)
+        query = f"SELECT * FROM {train_table}"
+        df_train = pd.read_sql(query, self.engine)
+        self.visualize_missing_values(df_train)
+        self.visualize_is_fraud(df_train['is_fraud'])
 
-        self.visualize_missing_values(df)
+        query = f"SELECT * FROM {test_table}"
+        df_test = pd.read_sql(query, self.engine)
         
-        # Feature engineering
-        df['trans_hour'] = df['trans_date_trans_time'].dt.hour
-        df['trans_day'] = df['trans_date_trans_time'].dt.dayofweek
-        df['age'] = (pd.to_datetime('today') - pd.to_datetime(df['dob'])).dt.days // 365
-        
-        # Select features
-        self.features = [
-            'amt', 'city_pop', 'age', 'trans_hour', 'trans_day',
-            'lat', 'long', 'merch_lat', 'merch_long'
-        ]
-        
-        # Encode categoricals
-        df = pd.get_dummies(df, columns=['category', 'gender', 'state'], drop_first=True)
-
-        self.visualize_is_fraud(df['is_fraud'])
-        
-        return df[self.features + [c for c in df.columns if c.startswith('category_')]], df['is_fraud']
+        return df_train, df_test
 
     def visualize_missing_values(self, df):
         """Generate visualizations for EDA."""
@@ -84,9 +71,10 @@ class FraudDetector:
         plt.savefig(os.path.join(self.eda_visuals_path, 'is_fraud_distribution.png'))
         plt.close()
 
-    def train_model(self, test_size=0.2, table_name='fraud_train'):
+    def train_model(self, test_size=0.2, train_table='fraud_train', test_table='fraud_test'):
         """Train and evaluate model with class balancing"""
-        X, y = self.load_data(table_name)
+        # Load data and select features
+        df_train, df_test = self.load_data(train_table, test_table)
         
         # Handle imbalance
         #smote = SMOTE(sampling_strategy=0.1, random_state=42)
@@ -115,7 +103,22 @@ class FraudDetector:
         # Generate visualizations
         self._plot_roc_curve(y_test, self.model.predict_proba(X_test)[:,1])
         self._plot_confusion_matrix(y_test, y_pred)
-        self._plot_feature_importance()
+        self._plot_feature_importance(X)
+    
+    def feature_engineering(self, df_train, df_test):
+        # Drop columns that are not important
+        # keep: trans_date_trans_time, cc_num,merchant, category, amt, gender, street, city, state, zip, lat, long, city_pop, job, dob, merch_lat, merch_long, is_fraud
+        columns_to_drop = ['trans_num', 'unix_time', 'first', 'last']
+        df_train.drop(columns=columns_to_drop, axis=1, inplace=True, errors='ignore')
+        df_test.drop(columns=columns_to_drop, axis=1, inplace=True, errors='ignore')
+
+        # Choose features and target for the training and test data
+        X_train = df_train.drop('is_fraud', axis=1)  # features
+        y_train = df_train['is_fraud']  # target variable
+
+        X_test = df_test.drop('is_fraud', axis=1)  # features
+        y_test = df_test['is_fraud']  # target
+        
 
     def _plot_roc_curve(self, y_true, y_probs):
         """Generate ROC curve visualization"""
@@ -141,22 +144,36 @@ class FraudDetector:
         plt.savefig(os.path.join(self.model_visuals_path, 'confusion_matrix.png'))
         plt.close()
 
-    def _plot_feature_importance(self):
-        """Generate feature importance visualization"""
-        feature_names = self.features
+    def _plot_feature_importance(self, X):
+        """Generate feature importance visualization."""
+        # Get feature importances from the model
         importances = self.model.feature_importances_
-
-        sorted_indices = np.argsort(importances)[-10:]
-
-        plt.figure(figsize=(10,6))
+        
+        # Combine feature names and importances
+        feature_names = X.columns.tolist()  # Ensure this includes all features used in training
+        if len(importances) != len(feature_names):
+            raise ValueError("Mismatch between model features and provided feature names.")
+        
+        # Create a DataFrame for sorting and plotting
+        importance_df = pd.DataFrame({
+            'Feature': feature_names,
+            'Importance': importances
+        }).sort_values(by='Importance', ascending=False)
+        
+        # Plot top 10 important features
+        top_features = importance_df.head(10)
+        
+        plt.figure(figsize=(10, 6))
+        plt.barh(top_features['Feature'], top_features['Importance'], color='skyblue')
+        plt.xlabel('Importance')
+        plt.ylabel('Feature')
         plt.title('Top 10 Important Features')
-        plt.barh(range(len(sorted_indices)), importances[sorted_indices], align='center')
-        plt.yticks(range(len(sorted_indices)), [feature_names[i] for i in sorted_indices])
+        plt.gca().invert_yaxis()  # Invert y-axis to show top features at the top
         plt.tight_layout()
+        
+        # Save and show plot
         plt.savefig(os.path.join(self.model_visuals_path, 'feature_importance.png'))
         plt.close()
-    
-
 
     def save_model(self, path):
         """Save trained model"""
