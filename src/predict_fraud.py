@@ -18,33 +18,43 @@ class FraudPredictionCLI:
         pbar.update(1)
         self.model_smote = joblib.load(os.path.join(model_path, 'balanced_model.pkl'))
         pbar.update(1)
-        self.label_encoders = joblib.load(os.path.join(model_path, 'label_encoder.pkl'))
+        self.label_encoder = joblib.load(os.path.join(model_path, 'label_encoder.pkl'))
         pbar.update(1)
         self.scaler = joblib.load(os.path.join(model_path, 'scaler.pkl'))
         pbar.update(1)
         
-        # Required features
-        self.required_features = [
-            'amt', 'city_pop', 'hour', 'day', 'month',
-            'lat', 'long', 'merch_lat', 'merch_long',
-            'category', 'gender', 'state', 'dob'
+        # Fit order
+        self.feature_set = [
+            'merchant', 'category', 'amt', 'gender', 'street', 'city', 'state',
+            'zip', 'lat', 'long', 'city_pop', 'job', 'dob', 'merch_lat',
+            'merch_long', 'cc_bin', 'hour', 'day', 'month'
         ]
 
     def feature_engineering(self, df_test):
         """Feature engineering input data to useable data"""
         # Initialize progress bar with a placeholder total
-        pbar = tqdm(total=7, desc="Feature Engineering", unit="step")
+        pbar = tqdm(total=9, desc="Feature Engineering", unit="step")
         
         # Drop columns that are not important
         # keep: trans_date_trans_time, cc_num,merchant, category, amt, gender, street, city, state, zip, lat, long, city_pop, job, dob, merch_lat, merch_long, is_fraud
-        columns_to_drop = ['trans_num', 'unix_time', 'first', 'last']
+        columns_to_drop = ['idx', 'trans_num', 'unix_time', 'first', 'last']
         df_test.drop(columns=columns_to_drop, axis=1, inplace=True, errors='ignore')
         pbar.update(1)
 
+        # Convert cc_num to cc_bin (first 6 digits of cc_num) and drop the column
+        if 'cc_num' in df_test.columns:
+            df_test['cc_bin'] = df_test['cc_num'].astype(str).str[:6]  # Extract first 6 digits
+            df_test.drop('cc_num', axis=1, inplace=True)  # Drop original cc_num column
+        pbar.update(1)
+
         # Choose features and target for the training and test data
-        X_test = df_test.drop('is_fraud', axis=1)  # features
+        X_test = df_test.drop('is_fraud', axis=1, errors='ignore')  # features
         if 'is_fraud' in X_test.columns:
             y_test = df_test['is_fraud']  # target, optional
+        pbar.update(1)
+
+        # Reorder the DataFrame
+        X_test = X_test.reindex(columns=self.feature_set, fill_value=None)
         pbar.update(1)
 
         # Recognize numerical and categorical features in the training data
@@ -92,57 +102,49 @@ class FraudPredictionCLI:
 
         return X_test, None
     
-    def single_to_df(self, args):
-        """Convert a single transaction into a DataFrame."""
-        return pd.DataFrame([{
-            'amt': args.amount,
-            'city_pop': args.city_pop,
-            'hour': args.hour,
-            'day': args.day,
-            'month': args.month,
-            'lat': args.lat,
-            'long': args.long,
-            'merch_lat': args.merch_lat,
-            'merch_long': args.merch_long,
-            'category': args.category,
-            'gender': args.gender,
-            'state': args.state,
-            'dob': args.dob
-        }])
-
     def predict_single(self, args):
         """Make a prediction using the trained model."""
         # Convert a single transaction into a DataFrame
         single_df = pd.DataFrame([{
+            'merchant': args.merchant,
+            'category': args.category,
             'amt': args.amount,
-            'city_pop': args.city_pop,
-            'hour': args.hour,
-            'day': args.day,
-            'month': args.month,
+            'gender': args.gender,
+            'street': args.street,
+            'city': args.city,
+            'state': args.state,
+            'zip': args.zip,
             'lat': args.lat,
             'long': args.long,
+            'city_pop': args.city_pop,
+            'job': args.job,
+            'dob': args.dob,
             'merch_lat': args.merch_lat,
             'merch_long': args.merch_long,
-            'category': args.category,
-            'gender': args.gender,
-            'state': args.state,
-            'dob': args.dob
+            'cc_bin': args.cc_bin,
+            'hour': args.hour,
+            'day': args.day,
+            'month': args.month
         }])
 
         # Feature engineering on input data
         X_test, y_test = self.feature_engineering(single_df)
         
-        # Make a prediction using the model
+        # Make a prediction using the unbalanced model
+        print("Prediction based on unbalanced model:")
         prediction = self.model.predict(X_test)
         probabilities = self.model.predict_proba(X_test)[:, 1]  # Probability of fraud
         
-        print(f"Prediction: {'Fraudulent' if result['prediction'] == 1 else 'Non-Fraudulent'}")
-        print(f"Probability of Fraud: {result['probability_of_fraud']:.2f}")
+        print(f"\tPrediction: {'Fraudulent' if int(prediction[0]) == 1 else 'Non-Fraudulent'}")
+        print(f"\tProbability of Fraud: {probabilities[0]:.2f}")
 
-        return {
-            "prediction": int(prediction[0]),  # 0: Non-fraudulent, 1: Fraudulent
-            "probability_of_fraud": probabilities[0]
-        }
+        # Make a prediction using the balanced model
+        print("Prediction based on balanced model:")
+        prediction = self.model_smote.predict(X_test)
+        probabilities = self.model_smote.predict_proba(X_test)[:, 1]  # Probability of fraud
+        
+        print(f"\tPrediction: {'Fraudulent' if int(prediction[0]) == 1 else 'Non-Fraudulent'}")
+        print(f"\tProbability of Fraud: {probabilities[0]:.2f}")
     
     @staticmethod
     def visualize_data(df, prediction_visuals_path):
@@ -187,12 +189,18 @@ if __name__ == "__main__":
     parser.add_argument('--hour', type=int, required=True, help="Transction Time - Hour (HH)")
     parser.add_argument('--day', type=int, required=True, help="Transction Time - Day (DD)")
     parser.add_argument('--month', type=int, required=True, help="Transction Time - Month (MM)")
-    parser.add_argument('--state', required=True, help="State (int)")
+    parser.add_argument('--cc-bin', required=True, help="Credit Card BIN (first 6 digits)")
+    parser.add_argument('--street', required=True, help="Street Address")
+    parser.add_argument('--city', required=True, help="City")
+    parser.add_argument('--state', required=True, help="State")
+    parser.add_argument('--zip', type=int, required=True, help="ZipCode")
     parser.add_argument('--city-pop', type=int, required=True, help="City Population (int)")
     parser.add_argument('--dob', required=True, help='Account Holder - Date of Birth (YYYY-MM-DD)')
     parser.add_argument('--gender', choices=["M","F"], required=True, help="Account Holder - Gender")
+    parser.add_argument('--job', required=True, help="Account Holder - Occupation")
     parser.add_argument('--lat', type=float, required=True, help="Account Holder - Latitude (float)")
     parser.add_argument('--long', type=float, required=True, help="Account Holder - Longitude (float)")
+    parser.add_argument('--merchant', required=True, help="Merchant Name")
     parser.add_argument('--merch-lat', type=float, required=True, help="Merchant - Latitude (float)")
     parser.add_argument('--merch-long', type=float, required=True, help="Merchant - Longitude (float)")
     parser.add_argument('--category',

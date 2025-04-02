@@ -128,7 +128,7 @@ class FraudDetector:
         
         # Model training
         print()
-        print("Training model...")
+        print("Training unbalanced model...")
         self.model = self._init_model(model_type)
         self.model.fit(X_train, y_train)
 
@@ -144,7 +144,7 @@ class FraudDetector:
 
         self._plot_roc_curve(y_test, self.model.predict_proba(X_test)[:,1], fn='unbalanced.roc_curve.png')
         self._plot_confusion_matrix(y_test, prediction, fn='unbalanced.confusion_matrix.png')
-        self._plot_feature_importance(X_train, fn='unbalanced.feature_importance..png')
+        self._plot_feature_importance(X_train, fn='unbalanced.feature_importance.png')
 
         # Handle imbalance with SMOTE
         print()
@@ -152,14 +152,16 @@ class FraudDetector:
         smote = SMOTE(sampling_strategy="auto", random_state=42)
         X_res, y_res = smote.fit_resample(X_train, y_train)
 
+        # Model training
         print("Training balanced model...")
         self.model_smote = self._init_model(model_type)
         self.model_smote.fit(X_res, y_res)
 
+        # Predict test data
         print("Predicting on test data...")
         prediction_smote = self.model_smote.predict(X_test)
 
-        # Re-evaluate and create visualizations
+        # Evaluate and create visualizations
         print("Balanced Model Evaluation (SMOTE):")
         print(classification_report(y_test, prediction_smote), end="")
         print(f"AUC-ROC Score: {roc_auc_score(y_test, prediction_smote):.2f}")
@@ -167,20 +169,26 @@ class FraudDetector:
 
         self._plot_roc_curve(y_test, self.model_smote.predict_proba(X_test)[:,1], fn='balanced.roc_curve.png')
         self._plot_confusion_matrix(y_test, prediction_smote, fn='balanced.confusion_matrix.png')
-        self._plot_feature_importance(X_res, fn='balanced.feature_importance..png')
+        self._plot_feature_importance(X_res, fn='balanced.feature_importance.png')
     
     def feature_engineering(self, df_train, df_test):
         """Feature engineering input data to useable data"""
         # Initialize progress bar with a placeholder total
-        pbar = tqdm(total=8, desc="Feature Engineering", unit="step")
+        pbar = tqdm(total=9, desc="Feature Engineering", unit="step")
         
         # Drop columns that are not important
         # keep: trans_date_trans_time, cc_num,merchant, category, amt, gender, street, city, state, zip, lat, long, city_pop, job, dob, merch_lat, merch_long, is_fraud
-        columns_to_drop = ['trans_num', 'unix_time', 'first', 'last']
+        columns_to_drop = ['idx', 'trans_num', 'unix_time', 'first', 'last']
         df_train.drop(columns=columns_to_drop, axis=1, inplace=True, errors='ignore')
         df_test.drop(columns=columns_to_drop, axis=1, inplace=True, errors='ignore')
         pbar.update(1)
 
+        # Convert cc_num to cc_bin (first 6 digits of cc_num) and drop the column
+        for df in [df_train, df_test]:
+            df['cc_bin'] = df['cc_num'].astype(str).str[:6]  # Extract first 6 digits
+            df.drop('cc_num', axis=1, inplace=True)  # Drop original cc_num column
+        pbar.update(1)
+        
         # Choose features and target for the training and test data
         X_train = df_train.drop('is_fraud', axis=1)  # features
         y_train = df_train['is_fraud']  # target variable
@@ -329,8 +337,9 @@ class FraudDetector:
 
         # Save balanced model
         balanced_model_path = os.path.join(path, 'balanced_model.pkl')
-        joblib.dump(self.model, balanced_model_path)
+        joblib.dump(self.model_smote, balanced_model_path)
         pbar.update(1)
+        pbar.close()
 
         print(f"Label Encoder saved to {label_encoder_path}")
         print(f"Scaler saved to {scaler_path}")
