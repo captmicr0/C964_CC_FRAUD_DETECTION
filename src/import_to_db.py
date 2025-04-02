@@ -2,6 +2,7 @@ import logging
 from datetime import datetime
 #from tqdm import tqdm
 from tqdm_loggable.auto import tqdm
+from tqdm_loggable.tqdm_logging import tqdm_logging
 
 import os
 import argparse
@@ -45,6 +46,10 @@ console_handler.setFormatter(formatter)
 # Add handlers to the logger
 logger.addHandler(file_handler)
 logger.addHandler(console_handler)
+
+# Configure tqdm-loggable to use the custom logger
+tqdm_logging.set_level(logging.INFO)  # Set the log level for tqdm
+tqdm_logging.logger = logger  # Explicitly set tqdm-loggable to use your logger
 
 class CSVImporter:
     def __init__(self, db_user, db_pass, db_host, db_name, table_name, csv_path):
