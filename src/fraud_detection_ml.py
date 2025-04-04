@@ -176,7 +176,8 @@ class FraudDetector:
 
         # Evaluate and create visualizations
         logger.info("Model Evaluation:")
-        logger.info(classification_report(y_test, prediction))
+        for line in classification_report(y_test, prediction).splitlines():
+            logger.info(line)
         logger.info(f"AUC-ROC Score: {roc_auc_score(y_test, prediction):.2f}")
         logger.info(f"Accuracy: {accuracy_score(y_test, prediction):.2f}")
 
@@ -200,7 +201,8 @@ class FraudDetector:
 
         # Evaluate and create visualizations
         logger.info("Balanced Model Evaluation (SMOTE):")
-        logger.info(classification_report(y_test, prediction_smote))
+        for line in classification_report(y_test, prediction_smote).splitlines():
+            logger.info(line)
         logger.info(f"AUC-ROC Score: {roc_auc_score(y_test, prediction_smote):.2f}")
         logger.info(f"Accuracy: {accuracy_score(y_test, prediction_smote):.2f}")
 
