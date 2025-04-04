@@ -13,6 +13,9 @@ from sklearn.preprocessing import LabelEncoder, StandardScaler
 import matplotlib.pyplot as plt
 import seaborn as sns
 
+import json
+from http.server import BaseHTTPRequestHandler, HTTPServer
+
 # Log file directory from ENV
 log_dir = os.environ.get("LOG_DIR", os.path.join(os.getcwd(), "../logs"))
 
@@ -185,6 +188,10 @@ class FraudPredictionCLI:
         
         logger.info(f"\tPrediction: {'Fraudulent' if int(prediction[0]) == 1 else 'Non-Fraudulent'}")
         logger.info(f"\tProbability of Fraud: {probabilities[0]:.2f}")
+
+        # Return results also
+        return {'prediction': 'fraudulent' if int(prediction[0]) == 1 else 'non-fraudulent',
+                'probability': probabilities[0]}
     
     @staticmethod
     def visualize_data(df, prediction_visuals_path):
@@ -218,37 +225,76 @@ class FraudPredictionCLI:
         plt.savefig(os.path.join(prediction_visuals_path, 'geographic_distribution.png'))
         plt.close()
 
+# HTTP Server for REST API
+class FraudPredictionAPI(BaseHTTPRequestHandler):
+    def __init__(self, *args, predictor=None, **kwargs):
+        self.predictor = predictor
+        super().__init__(*args, **kwargs)
+
+    def do_POST(self):
+        if self.path == '/predict':
+            content_length = int(self.headers['Content-Length'])
+            post_data = self.rfile.read(content_length)
+            
+            try:
+                # Parse JSON input
+                data = json.loads(post_data)
+                
+                # Validate required fields
+                required_fields = [
+                    "amount", "hour", "day", "month", "cc_bin", "street", "city", 
+                    "state", "zip", "city_pop", "dob", "gender", "job", 
+                    "lat", "long", "merchant", "merch_lat", "merch_long", 
+                    "category"
+                ]
+                if not all(field in data for field in required_fields):
+                    self.send_response(400)
+                    self.end_headers()
+                    response = {"error": f"Missing required fields: {required_fields}"}
+                    self.wfile.write(json.dumps(response).encode('utf-8'))
+                    return
+                
+                # Convert input data to argparse.Namespace for compatibility with predict_single
+                input_args = argparse.Namespace(**data)
+                
+                # Make prediction
+                result = self.predictor.predict_single(input_args)
+                
+                # Send response
+                self.send_response(200)
+                self.end_headers()
+                self.wfile.write(json.dumps(result).encode('utf-8'))
+            
+            except Exception as e:
+                # Handle errors gracefully
+                self.send_response(500)
+                self.end_headers()
+                response = {"error": str(e)}
+                self.wfile.write(json.dumps(response).encode('utf-8'))
+
+def run_api_server(predictor, host='0.0.0.0', port=8000):
+    def handler(*args, **kwargs):
+        FraudPredictionAPI(*args, predictor=predictor, **kwargs)
+
+    server = HTTPServer((host, port), handler)
+    print(f"Starting API server at http://{host}:{port}")
+    server.serve_forever()
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Fraud Prediction System')
     
     # Updated arguments matching new features
     # idx, trans_date_trans_time, cc_num, merchant, category, amt, first, last, gender, street, city, state, zip, lat, long, city_pop, job, dob, trans_num, unix_time, merch_lat, merch_long, is_fraud
     # 0, 2019-01-01 00:00:18, 2703186189652095, "fraud_Rippin,  Kub and Mann", misc_net, 4.97, Jennifer, Banks, F, 561 Perry Cove, Moravian Falls, NC, 28654, 36.0788, -81.1781, 3495, "Psychologist,  counselling", 1988-03-09, 0b242abb623afc578575680df30655b9, 1325376018, 36.011293, -82.048315, 0
-
-    parser.add_argument('--amount', type=float, required=True, help="Transaction Amount (float)")
-    parser.add_argument('--hour', type=int, required=True, help="Transction Time - Hour (HH)")
-    parser.add_argument('--day', type=int, required=True, help="Transction Time - Day (DD)")
-    parser.add_argument('--month', type=int, required=True, help="Transction Time - Month (MM)")
-    parser.add_argument('--cc-bin', required=True, help="Credit Card BIN (first 6 digits)")
-    parser.add_argument('--street', required=True, help="Street Address")
-    parser.add_argument('--city', required=True, help="City")
-    parser.add_argument('--state', required=True, help="State")
-    parser.add_argument('--zip', type=int, required=True, help="ZipCode")
-    parser.add_argument('--city-pop', type=int, required=True, help="City Population (int)")
-    parser.add_argument('--dob', required=True, help='Account Holder - Date of Birth (YYYY-MM-DD)')
-    parser.add_argument('--gender', choices=["M","F"], required=True, help="Account Holder - Gender")
-    parser.add_argument('--job', required=True, help="Account Holder - Occupation")
-    parser.add_argument('--lat', type=float, required=True, help="Account Holder - Latitude (float)")
-    parser.add_argument('--long', type=float, required=True, help="Account Holder - Longitude (float)")
-    parser.add_argument('--merchant', required=True, help="Merchant Name")
-    parser.add_argument('--merch-lat', type=float, required=True, help="Merchant - Latitude (float)")
-    parser.add_argument('--merch-long', type=float, required=True, help="Merchant - Longitude (float)")
-    parser.add_argument('--category',
-                        choices=["entertainment","food_dining","gas_transport","grocery_net","grocery_pos",
-                                 "health_fitness","home","kids_pets","misc_net","misc_pos","personal_care",
-                                 "shopping_net","shopping_pos","travel"],
-                        required=True, help="Merchant - Category")
     
+    parser.add_argument('--api-server', action='store_true',
+                        help="Start REST API server instead of CLI mode")
+    parser.add_argument('--host', default='0.0.0.0',
+                        help="API server host (default: 0.0.0.0)")
+    parser.add_argument('--port', type=int, default=8000,
+                        help="API server port (default: 8000)")
+    
+    # Model artifacts path
     parser.add_argument(
         '--model-path', 
         default=os.getenv('MODEL_PATH', '../data/model/'),  # Fallback to ENV var MODEL_PATH or default value
@@ -262,13 +308,47 @@ if __name__ == "__main__":
         help='Directory where prediction visuals are stored (default: ../data/prediction_visuals/ or ENV var PREDICTION_VISUALS_PATH)'
     )
 
+    cli_args_group = parser.add_argument_group("CLI Arguments")
+    cli_args_group.add_argument('--amount', type=float, help="Transaction Amount (float)")
+    cli_args_group.add_argument('--hour', type=int, help="Transction Time - Hour (HH)")
+    cli_args_group.add_argument('--day', type=int, help="Transction Time - Day (DD)")
+    cli_args_group.add_argument('--month', type=int, help="Transction Time - Month (MM)")
+    cli_args_group.add_argument('--cc-bin', help="Credit Card BIN (first 6 digits)")
+    cli_args_group.add_argument('--street', help="Street Address")
+    cli_args_group.add_argument('--city', help="City")
+    cli_args_group.add_argument('--state', help="State")
+    cli_args_group.add_argument('--zip', type=int, help="ZipCode")
+    cli_args_group.add_argument('--city-pop', type=int, help="City Population (int)")
+    cli_args_group.add_argument('--dob', help='Account Holder - Date of Birth (YYYY-MM-DD)')
+    cli_args_group.add_argument('--gender', choices=["M","F"], help="Account Holder - Gender")
+    cli_args_group.add_argument('--job', help="Account Holder - Occupation")
+    cli_args_group.add_argument('--lat', type=float, help="Account Holder - Latitude (float)")
+    cli_args_group.add_argument('--long', type=float, help="Account Holder - Longitude (float)")
+    cli_args_group.add_argument('--merchant', help="Merchant Name")
+    cli_args_group.add_argument('--merch-lat', type=float, help="Merchant - Latitude (float)")
+    cli_args_group.add_argument('--merch-long', type=float, help="Merchant - Longitude (float)")
+    cli_args_group.add_argument('--category',
+                        choices=["entertainment","food_dining","gas_transport","grocery_net","grocery_pos",
+                                 "health_fitness","home","kids_pets","misc_net","misc_pos","personal_care",
+                                 "shopping_net","shopping_pos","travel"],
+                        help="Merchant - Category")
+    
+
     # Add DB/model path arguments from original script
     args = parser.parse_args()
     
-    # Initialize the predictor and make predictions
     predictor = FraudPredictionCLI(args.model_path)
-    result = predictor.predict_single(args)
-
+    
+    if args.api_server:
+        run_api_server(predictor, host=args.host, port=args.port)
+    else:
+        # Check that all CLI arguments are provided when not in API mode
+        missing_arguments = [arg for arg in vars(args) if getattr(args, arg) is None and arg != "api_server"]
+        
+        if missing_arguments:
+            parser.error(f"The following arguments are required in CLI mode: {missing_arguments}")
+        
+        result = predictor.predict_single(args)
 
 # Examples:
 # python predict_fraud.py --amount 1077.69 --hour 22 --day 21 --month 6 --cc-bin 400567 --street "458 Phillips Island Apt. 768" --city "Denham Springs" --state LA --zip 70726 --city-pop 71335 --dob 1994-05-31 --gender M --job "Herbalist" --lat 30.459 --long -90.9027 --merchant "Heathcote, Yost and Kertzmann" --merch-lat 31.204974 --merch-long -90.261595 --category shopping_net
