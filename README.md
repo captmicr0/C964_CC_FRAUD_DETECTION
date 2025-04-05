@@ -72,7 +72,7 @@ Ensure you have the following installed on your system:
   docker compose up -d
   ```
 
-3. Attach the the fraud-detection-app service to get an interactive terminal:
+3. Attach to the fraud-detection-app service to get an interactive terminal:
   ```
   docker compose exec fraud-detection-app bash
   ```
