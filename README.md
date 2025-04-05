@@ -103,7 +103,7 @@ Ensure you have the following installed on your system:
   python src/predict_fraud.py --model-path /app/data/model --amount 843.91 --hour 23 --day 2 --month 1 --cc-bin 461331 --street "542 Steve Curve Suite 011" --city "Collettsville" --state NC --zip 28611 --city-pop 885 --dob 1988-09-15 --gender M --job "Soil scientist" --lat 35.9946 --long -81.7266 --merchant "Ruecker Group" --merch-lat 35.985612 --merch-long -81.383306 --category misc_net
   ```
 
-7. Optional: Start the REST API server (defaults to 0.0.0.0:8000) and test it:
+7. Optional: Start the REST API server and test it:
   ```
   python predict_fraud.py --api-server
   ```
@@ -183,9 +183,34 @@ Ensure you have the following installed on your system:
   python predict_fraud.py --amount 843.91 --hour 23 --day 2 --month 1 --cc-bin 461331 --street "542 Steve Curve Suite 011" --city "Collettsville" --state NC --zip 28611 --city-pop 885 --dob 1988-09-15 --gender M --job "Soil scientist" --lat 35.9946 --long -81.7266 --merchant "Ruecker Group" --merch-lat 35.985612 --merch-long -81.383306 --category misc_net
   ```
 
-8. Optional: Start the REST API server (defaults to 0.0.0.0:8000):
+8. Optional: Start the REST API server and test it (unable to test on Windows):
   ```
   python predict_fraud.py --api-server
+  ```
+  ```
+  curl -X POST -H "Content-Type: application/json" \
+  -d '{
+    "amount": 843.91,
+    "hour": 23,
+    "day": 2,
+    "month": 1,
+    "cc_bin": "461331",
+    "street": "542 Steve Curve Suite 011",
+    "city": "Collettsville",
+    "state": "NC",
+    "zip": 28611,
+    "city_pop": 885,
+    "dob": "1988-09-15",
+    "gender": "M",
+    "job": "Soil scientist",
+    "lat": 35.9946,
+    "long": -81.7266,
+    "merchant": "Ruecker Group",
+    "merch_lat": 35.985612,
+    "merch_long": -81.383306,
+    "category": "misc_net"
+  }' \
+  http://10.10.0.200:8000/predict
   ```
 
 ## Future Enhancements
